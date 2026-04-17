@@ -11,3 +11,11 @@ plotly
 requests
 matplotlib
 streamlit 
+streamlit
+numpy
+pandas
+plotly
+matplotlib
+scipy
+requests
+# Optional: GSAS-II (for advanced refinement)
