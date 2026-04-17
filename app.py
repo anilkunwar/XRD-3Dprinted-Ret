@@ -372,23 +372,15 @@ def generate_report(result, phases, wavelength, sample_key):
     return report
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ENHANCED PLOTTING FUNCTION (with square/diamond, legend control, spacing)
+# ENHANCED PLOTTING FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 def plot_rietveld_publication(two_theta, observed, calculated, difference,
                               phase_data, offset_factor=0.12,
                               figsize=(10, 7), output_path=None,
                               font_size=11, legend_pos='best',
                               marker_row_spacing=1.3, legend_phases=None):
-    """
-    Generate publication-quality Rietveld plot with customizable markers and legend.
-    
-    Parameters:
-    -----------
-    legend_phases : list or None
-        List of phase names to include in legend. If None, include all.
-    marker_row_spacing : float
-        Vertical spacing multiplier between phase marker rows (default: 1.3)
-    """
+    """Generate publication-quality Rietveld plot with customizable markers and legend."""
     plt.rcParams.update({
         'font.family': 'serif',
         'font.serif': ['Times New Roman', 'DejaVu Serif', 'Computer Modern'],
@@ -422,16 +414,15 @@ def plot_rietveld_publication(two_theta, observed, calculated, difference,
     shape_styles = {
         '|': {'marker': '|', 'markersize': 14, 'markeredgewidth': 2.5},
         '_': {'marker': '_', 'markersize': 14, 'markeredgewidth': 2.5},
-        's': {'marker': 's', 'markersize': 7, 'markeredgewidth': 1.5},  # ✅ Square
+        's': {'marker': 's', 'markersize': 7, 'markeredgewidth': 1.5},
         '^': {'marker': '^', 'markersize': 8, 'markeredgewidth': 1.5},
         'v': {'marker': 'v', 'markersize': 8, 'markeredgewidth': 1.5},
-        'd': {'marker': 'd', 'markersize': 7, 'markeredgewidth': 1.5},  # ✅ Diamond
+        'd': {'marker': 'd', 'markersize': 7, 'markeredgewidth': 1.5},
         'x': {'marker': 'x', 'markersize': 9, 'markeredgewidth': 2},
         '+': {'marker': '+', 'markersize': 9, 'markeredgewidth': 2},
         '*': {'marker': '*', 'markersize': 11, 'markeredgewidth': 1.5},
     }
     
-    # Track which phases should appear in legend
     phases_in_legend = legend_phases if legend_phases is not None else [p['name'] for p in phase_data]
     
     for i, phase in enumerate(phase_data):
@@ -442,12 +433,9 @@ def plot_rietveld_publication(two_theta, observed, calculated, difference,
         hkls = phase.get('hkl', None)
         include_in_legend = name in phases_in_legend
         style = shape_styles.get(shape, shape_styles['|'])
-        
-        # ✅ CONTROLLED SPACING: marker_row_spacing parameter
         tick_y = diff_offset - (i + 1) * tick_height * marker_row_spacing
         
         for j, pos in enumerate(positions):
-            # Only add label for first peak of phases included in legend
             label = name if (j == 0 and include_in_legend) else ""
             ax.plot(pos, tick_y, **style, color=color, label=label, zorder=5)
             if hkls and j < len(hkls) and hkls[j] and j % 2 == 0:
@@ -463,10 +451,95 @@ def plot_rietveld_publication(two_theta, observed, calculated, difference,
     ax.yaxis.set_minor_locator(AutoMinorLocator(2))
     
     if legend_pos != "off":
-        # Only show legend if there are items to display
         if any(p['name'] in phases_in_legend for p in phase_data):
             ax.legend(loc=legend_pos, frameon=True, fancybox=False, edgecolor='black', framealpha=1.0)
         
+    plt.tight_layout()
+    if output_path:
+        plt.savefig(output_path, format='pdf', bbox_inches='tight')
+        plt.savefig(output_path.replace('.pdf', '.png'), dpi=300, bbox_inches='tight')
+    return fig, ax
+
+
+# ✅ NEW: Publication-quality sample comparison plot function
+def plot_sample_comparison_publication(sample_data_list, tt_min, tt_max,
+                                       figsize=(10, 7), output_path=None,
+                                       font_size=11, legend_pos='best',
+                                       normalize=True, stack_offset=0,
+                                       line_styles=None, legend_labels=None):
+    """
+    Generate publication-quality comparison plot for multiple XRD samples.
+    
+    Parameters:
+    -----------
+    sample_data_list : list of dicts
+        Each dict contains: {"two_theta": array, "intensity": array, "label": str, "color": str}
+    normalize : bool
+        Whether to normalize intensities to [0, 1]
+    stack_offset : float
+        Vertical offset between stacked patterns (0 = overlay, >0 = waterfall)
+    line_styles : list or None
+        Line styles for each sample (e.g., ['-', '--', ':', '-.'])
+    legend_labels : list or None
+        Custom labels for legend (overrides sample labels)
+    """
+    plt.rcParams.update({
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman', 'DejaVu Serif', 'Computer Modern'],
+        'font.size': font_size, 
+        'axes.labelsize': font_size + 1, 
+        'axes.titlesize': font_size + 2,
+        'xtick.labelsize': font_size, 
+        'ytick.labelsize': font_size, 
+        'legend.fontsize': font_size - 1,
+        'axes.linewidth': 1.2, 'xtick.major.width': 1.2, 'ytick.major.width': 1.2,
+        'xtick.minor.width': 0.9, 'ytick.minor.width': 0.9,
+        'xtick.major.size': 5, 'ytick.major.size': 5,
+        'xtick.minor.size': 3, 'ytick.minor.size': 3,
+        'figure.dpi': 300, 'savefig.dpi': 300,
+    })
+    
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    default_styles = ['-', '--', ':', '-.', (0, (3, 1, 1, 1)), (0, (5, 5))]
+    
+    for i, sample in enumerate(sample_data_list):
+        x = sample["two_theta"]
+        y = sample["intensity"].copy()
+        
+        # Filter to range
+        mask = (x >= tt_min) & (x <= tt_max)
+        x, y = x[mask], y[mask]
+        
+        # Normalize if requested
+        if normalize and len(y) > 1:
+            y_min, y_max = y.min(), y.max()
+            if y_max > y_min:
+                y = (y - y_min) / (y_max - y_min)
+        
+        # Apply stacking offset
+        y_plot = y + i * stack_offset
+        
+        # Get style parameters
+        color = sample.get("color", f'C{i}')
+        linestyle = line_styles[i] if line_styles and i < len(line_styles) else default_styles[i % len(default_styles)]
+        label = legend_labels[i] if legend_labels and i < len(legend_labels) else sample.get("label", f"Sample {i+1}")
+        linewidth = sample.get("linewidth", 1.5)
+        
+        ax.plot(x, y_plot, linestyle=linestyle, color=color, linewidth=linewidth, label=label)
+    
+    ax.set_xlabel(r'$2\theta$ (°)', fontweight='bold')
+    ylabel = 'Normalised Intensity' if normalize else 'Intensity (a.u.)'
+    if stack_offset > 0:
+        ylabel += ' (offset)'
+    ax.set_ylabel(ylabel, fontweight='bold')
+    
+    ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+    ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+    
+    if legend_pos != "off" and len(sample_data_list) > 0:
+        ax.legend(loc=legend_pos, frameon=True, fancybox=False, edgecolor='black', framealpha=1.0)
+    
     plt.tight_layout()
     if output_path:
         plt.savefig(output_path, format='pdf', bbox_inches='tight')
@@ -817,25 +890,191 @@ with tabs[3]:
             rows.append({"Phase": ph, "Crystal system": pi["system"], "Space group": pi["space_group"], "a (Å)": f"{lp.get('a','—'):.5f}" if isinstance(lp.get('a'), (int,float)) else "—", "c (Å)": f"{lp.get('c','—'):.5f}" if isinstance(lp.get('c'), (int,float)) else "—", "Wt%": f"{fracs.get(ph,0)*100:.2f}", "Role": pi["description"][:65]+"…" if len(pi["description"])>65 else pi["description"]})
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
-# TAB 4 — SAMPLE COMPARISON
+# TAB 4 — ENHANCED SAMPLE COMPARISON (Publication-Quality)
 with tabs[4]:
-    st.subheader("Multi-Sample Comparison")
-    comp_mode = st.radio("View mode", ["Overlay patterns", "Groups comparison", "Heat-treated vs As-built"], horizontal=True)
-    comp_samples = st.multiselect("Select samples to overlay", options=SAMPLE_KEYS, default=SAMPLE_KEYS, format_func=lambda k: SAMPLE_CATALOG[k]["label"])
-    normalise = st.checkbox("Normalise to max intensity", value=True)
+    st.subheader("🔄 Multi-Sample Comparison")
+    
+    # View mode selection
+    view_mode = st.radio("View mode", ["📊 Interactive (Plotly)", "🖼️ Publication-Quality (Matplotlib)"], horizontal=True, key="comp_view_mode")
+    
+    # Sample selection
+    comp_samples = st.multiselect(
+        "Select samples to compare", 
+        options=SAMPLE_KEYS, 
+        default=[k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Printed"][:4],
+        format_func=lambda k: f"[{SAMPLE_CATALOG[k]['short']}] {SAMPLE_CATALOG[k]['label']}",
+        key="comp_samples"
+    )
+    
     if not comp_samples:
-        st.warning("Select at least one sample.")
+        st.warning("⚠️ Select at least one sample to compare.")
     else:
-        fig_cmp = go.Figure()
-        for k in comp_samples:
-            df_s = all_data[k] if k in all_data else pd.DataFrame({"two_theta": np.linspace(30,130,2000), "intensity": np.random.normal(200,50,2000)})
-            I = df_s["intensity"].values
-            if normalise: I = (I - I.min()) / (I.max() - I.min() + 1e-8)
-            m = SAMPLE_CATALOG[k]
-            dash = "solid"
-            fig_cmp.add_trace(go.Scatter(x=df_s["two_theta"], y=I, mode="lines", name=m["label"], line=dict(color=m["color"], width=1.2, dash=dash)))
-        fig_cmp.update_layout(title="All selected samples", xaxis_title="2θ (degrees)", yaxis_title="Normalised intensity" if normalise else "Intensity (counts)", template="plotly_white", height=480, hovermode="x unified")
-        st.plotly_chart(fig_cmp, use_container_width=True)
+        # Common settings for both modes
+        col_opt1, col_opt2 = st.columns(2)
+        with col_opt1:
+            normalize = st.checkbox("✓ Normalise to [0,1]", value=True, key="comp_normalize")
+            show_grid = st.checkbox("✓ Show grid", value=True, key="comp_grid")
+        with col_opt2:
+            line_width = st.slider("Line width", 0.5, 3.0, 1.5, 0.1, key="comp_lw")
+            opacity = st.slider("Opacity", 0.3, 1.0, 1.0, 0.1, key="comp_alpha")
+        
+        # ── PLOTLY MODE (Interactive) ─────────────────────────────
+        if view_mode == "📊 Interactive (Plotly)":
+            fig_cmp = go.Figure()
+            for k in comp_samples:
+                # Load or generate data
+                if k in all_data:
+                    df_s = all_data[k]
+                else:
+                    # Fallback synthetic data
+                    df_s = pd.DataFrame({
+                        "two_theta": np.linspace(30, 130, 2000),
+                        "intensity": np.random.normal(200, 50, 2000)
+                    })
+                
+                x, y = df_s["two_theta"].values, df_s["intensity"].values
+                if normalize and len(y) > 1:
+                    y = (y - y.min()) / (y.max() - y.min() + 1e-8)
+                
+                m = SAMPLE_CATALOG[k]
+                fig_cmp.add_trace(go.Scatter(
+                    x=x, y=y, mode="lines", name=m["label"],
+                    line=dict(color=m["color"], width=line_width),
+                    opacity=opacity
+                ))
+            
+            fig_cmp.update_layout(
+                title="XRD Pattern Comparison",
+                xaxis_title="2θ (degrees)",
+                yaxis_title="Normalised Intensity" if normalize else "Intensity (counts)",
+                template="plotly_white" if show_grid else "plotly",
+                height=500,
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_cmp, use_container_width=True)
+            
+            with st.expander("📋 Comparison Data Summary"):
+                summary_data = []
+                for k in comp_samples:
+                    m = SAMPLE_CATALOG[k]
+                    df_s = all_data.get(k, pd.DataFrame({"two_theta": [], "intensity": []}))
+                    if len(df_s) > 0:
+                        summary_data.append({
+                            "Sample": m["short"],
+                            "Label": m["label"],
+                            "Fabrication": m["fabrication"],
+                            "Treatment": m["treatment"],
+                            "Points": len(df_s),
+                            "2θ Range": f"{df_s['two_theta'].min():.1f}–{df_s['two_theta'].max():.1f}°",
+                            "Max Intensity": f"{df_s['intensity'].max():.0f}" if len(df_s) > 0 else "N/A"
+                        })
+                st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
+        
+        # ── MATPLOTLIB MODE (Publication-Quality) ─────────────────
+        else:
+            st.markdown("### 🎨 Publication Plot Settings")
+            col_pub1, col_pub2, col_pub3 = st.columns(3)
+            
+            with col_pub1:
+                pub_width = st.slider("Width (inches)", 6, 14, 10, 0.5, key="pub_comp_w")
+                pub_font = st.slider("Font Size", 8, 18, 11, 1, key="pub_comp_font")
+                stack_offset = st.slider("Stack offset", 0.0, 1.5, 0.0, 0.1, key="pub_comp_stack", help="0 = overlay, >0 = waterfall stacking")
+            
+            with col_pub2:
+                pub_height = st.slider("Height (inches)", 5, 12, 7, 0.5, key="pub_comp_h")
+                pub_legend_pos = st.selectbox("Legend", ["best", "upper right", "upper left", "lower left", "lower right", "center right", "off"], key="pub_comp_leg")
+                export_fmt = st.selectbox("Export", ["PDF", "PNG", "EPS"], key="pub_comp_fmt")
+            
+            with col_pub3:
+                st.markdown("**🎨 Per-Sample Styling**")
+                sample_styles = {}
+                for k in comp_samples:
+                    m = SAMPLE_CATALOG[k]
+                    with st.expander(f"{m['short']}", expanded=False):
+                        sample_styles[k] = {
+                            "color": st.color_picker("Color", m["color"], key=f"col_{k}"),
+                            "style": st.selectbox("Line", ["-", "--", ":", "-."], index=0, key=f"sty_{k}"),
+                            "width": st.slider("Width", 0.5, 3.0, 1.5, 0.1, key=f"lw_{k}"),
+                            "label": st.text_input("Legend Label", m["label"], key=f"lbl_{k}")
+                        }
+            
+            # Prepare data for plotting
+            sample_data_list = []
+            legend_labels = []
+            line_styles = []
+            
+            for k in comp_samples:
+                if k in all_data:
+                    df_s = all_data[k]
+                else:
+                    df_s = pd.DataFrame({
+                        "two_theta": np.linspace(30, 130, 2000),
+                        "intensity": np.random.normal(200, 50, 2000)
+                    })
+                
+                styles = sample_styles.get(k, {})
+                sample_data_list.append({
+                    "two_theta": df_s["two_theta"].values,
+                    "intensity": df_s["intensity"].values,
+                    "label": SAMPLE_CATALOG[k]["label"],
+                    "color": styles.get("color", SAMPLE_CATALOG[k]["color"]),
+                    "linewidth": styles.get("width", line_width)
+                })
+                legend_labels.append(styles.get("label", SAMPLE_CATALOG[k]["label"]))
+                line_styles.append(styles.get("style", "-"))
+            
+            # Generate publication plot
+            try:
+                fig_pub, ax_pub = plot_sample_comparison_publication(
+                    sample_data_list=sample_data_list,
+                    tt_min=tt_min,
+                    tt_max=tt_max,
+                    figsize=(pub_width, pub_height),
+                    font_size=pub_font,
+                    legend_pos=pub_legend_pos if pub_legend_pos != "off" else "off",
+                    normalize=normalize,
+                    stack_offset=stack_offset,
+                    line_styles=line_styles,
+                    legend_labels=legend_labels
+                )
+                
+                if show_grid:
+                    ax_pub.grid(True, linestyle=':', linewidth=0.5, alpha=0.7)
+                
+                st.pyplot(fig_pub, dpi=150, use_container_width=True)
+                
+                # Export buttons
+                st.markdown("#### 📥 Export Publication Figure")
+                col_e1, col_e2, col_e3 = st.columns(3)
+                
+                with col_e1:
+                    buf = io.BytesIO()
+                    fig_pub.savefig(buf, format='pdf', bbox_inches='tight')
+                    buf.seek(0)
+                    st.download_button("📄 PDF", buf.read(), 
+                                     file_name=f"xrd_comparison_{len(comp_samples)}samples.pdf",
+                                     mime="application/pdf", use_container_width=True)
+                with col_e2:
+                    buf = io.BytesIO()
+                    fig_pub.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+                    buf.seek(0)
+                    st.download_button("🖼️ PNG (300 DPI)", buf.read(), 
+                                     file_name=f"xrd_comparison_{len(comp_samples)}samples.png",
+                                     mime="image/png", use_container_width=True)
+                with col_e3:
+                    buf = io.BytesIO()
+                    fig_pub.savefig(buf, format='eps', bbox_inches='tight')
+                    buf.seek(0)
+                    st.download_button("📐 EPS", buf.read(), 
+                                     file_name=f"xrd_comparison_{len(comp_samples)}samples.eps",
+                                     mime="application/postscript", use_container_width=True)
+                
+                plt.close(fig_pub)
+                
+            except Exception as e:
+                st.error(f"❌ Plot generation failed: {str(e)}")
+                st.code("Tip: Try reducing the number of samples or resetting font size.")
 
 # TAB 5 — REPORT
 with tabs[5]:
