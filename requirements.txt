@@ -10,4 +10,8 @@ pandas
 plotly
 requests
 matplotlib
+# Verify syntax before deploying
+python -m py_compile RETVIELD.py && echo "✅ Syntax OK"
 
+# Run locally
+streamlit run RETVIELD.py
