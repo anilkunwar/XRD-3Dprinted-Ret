@@ -42,7 +42,6 @@ SAMPLE_CATALOG = {
 SAMPLE_KEYS = list(SAMPLE_CATALOG.keys())
 GROUPS = {"Printed": [k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Printed"], "Reference": [k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Reference"]}
 
-# Common X-ray sources with Kα₁ wavelengths
 XRAY_SOURCES = {
     "Cu Kα₁ (1.5406 Å)": 1.5406,
     "Co Kα₁ (1.7890 Å)": 1.7890,
@@ -140,7 +139,6 @@ def find_peaks_in_data(df, min_height_factor=2.0, min_distance_deg=0.3):
 
 @st.cache_data
 def parse_asc(raw_bytes: bytes) -> pd.DataFrame:
-    """Parse .asc or generic two-column XRD files"""
     text = raw_bytes.decode("utf-8", errors="replace")
     rows = []
     for line in text.splitlines():
@@ -162,7 +160,6 @@ def parse_asc(raw_bytes: bytes) -> pd.DataFrame:
 
 @st.cache_data
 def parse_xrdml(raw_bytes: bytes) -> pd.DataFrame:
-    """Parse PANalytical/X'Pert .xrdml XML format files."""
     try:
         text = raw_bytes.decode("utf-8", errors="replace")
         text_clean = re.sub(r'\sxmlns="[^"]+"', '', text, count=1)
@@ -258,7 +255,6 @@ def download_github_file(url: str) -> bytes:
 
 @st.cache_data
 def find_github_file_by_catalog_key(catalog_key: str, gh_files: list):
-    """Match SAMPLE_CATALOG entry to GitHub file list (case-insensitive)"""
     target = SAMPLE_CATALOG[catalog_key]["filename"].upper()
     for f in gh_files:
         if f["name"].upper() == target:
@@ -380,7 +376,6 @@ def plot_rietveld_publication(two_theta, observed, calculated, difference,
                               figsize=(10, 7), output_path=None,
                               font_size=11, legend_pos='best',
                               marker_row_spacing=1.3, legend_phases=None):
-    """Generate publication-quality Rietveld plot with customizable markers and legend."""
     plt.rcParams.update({
         'font.family': 'serif',
         'font.serif': ['Times New Roman', 'DejaVu Serif', 'Computer Modern'],
@@ -461,28 +456,12 @@ def plot_rietveld_publication(two_theta, observed, calculated, difference,
     return fig, ax
 
 
-# ✅ NEW: Publication-quality sample comparison plot function
 def plot_sample_comparison_publication(sample_data_list, tt_min, tt_max,
                                        figsize=(10, 7), output_path=None,
                                        font_size=11, legend_pos='best',
-                                       normalize=True, stack_offset=0,
-                                       line_styles=None, legend_labels=None):
-    """
-    Generate publication-quality comparison plot for multiple XRD samples.
-    
-    Parameters:
-    -----------
-    sample_data_list : list of dicts
-        Each dict contains: {"two_theta": array, "intensity": array, "label": str, "color": str}
-    normalize : bool
-        Whether to normalize intensities to [0, 1]
-    stack_offset : float
-        Vertical offset between stacked patterns (0 = overlay, >0 = waterfall)
-    line_styles : list or None
-        Line styles for each sample (e.g., ['-', '--', ':', '-.'])
-    legend_labels : list or None
-        Custom labels for legend (overrides sample labels)
-    """
+                                       normalize=True, stack_offset=0.0,
+                                       line_styles=None, legend_labels=None,
+                                       show_grid=True):
     plt.rcParams.update({
         'font.family': 'serif',
         'font.serif': ['Times New Roman', 'DejaVu Serif', 'Computer Modern'],
@@ -500,27 +479,22 @@ def plot_sample_comparison_publication(sample_data_list, tt_min, tt_max,
     })
     
     fig, ax = plt.subplots(figsize=figsize)
-    
     default_styles = ['-', '--', ':', '-.', (0, (3, 1, 1, 1)), (0, (5, 5))]
     
     for i, sample in enumerate(sample_data_list):
         x = sample["two_theta"]
         y = sample["intensity"].copy()
         
-        # Filter to range
         mask = (x >= tt_min) & (x <= tt_max)
         x, y = x[mask], y[mask]
         
-        # Normalize if requested
         if normalize and len(y) > 1:
             y_min, y_max = y.min(), y.max()
             if y_max > y_min:
                 y = (y - y_min) / (y_max - y_min)
         
-        # Apply stacking offset
         y_plot = y + i * stack_offset
         
-        # Get style parameters
         color = sample.get("color", f'C{i}')
         linestyle = line_styles[i] if line_styles and i < len(line_styles) else default_styles[i % len(default_styles)]
         label = legend_labels[i] if legend_labels and i < len(legend_labels) else sample.get("label", f"Sample {i+1}")
@@ -537,6 +511,9 @@ def plot_sample_comparison_publication(sample_data_list, tt_min, tt_max,
     ax.xaxis.set_minor_locator(AutoMinorLocator(2))
     ax.yaxis.set_minor_locator(AutoMinorLocator(2))
     
+    if show_grid:
+        ax.grid(True, which='both', linestyle=':', linewidth=0.5, alpha=0.7)
+        
     if legend_pos != "off" and len(sample_data_list) > 0:
         ax.legend(loc=legend_pos, frameon=True, fancybox=False, edgecolor='black', framealpha=1.0)
     
@@ -703,27 +680,14 @@ with st.sidebar:
         else:
             st.warning("⚠️ Generating synthetic XRD pattern for demonstration.")
     
-    # ═══════════════════════════════════════════════════════════════════════════
-    # 🔬 INSTRUMENT & WAVELENGTH SELECTION
-    # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
     st.subheader("🔬 Instrument")
     
     source_name = st.selectbox("X-ray Source Tube", list(XRAY_SOURCES.keys()), index=0)
     if source_name != "Custom Wavelength":
-        wavelength = st.number_input(
-            "λ (Å)", 
-            value=XRAY_SOURCES[source_name], 
-            min_value=0.5, max_value=2.5, step=0.0001, 
-            format="%.4f", disabled=True
-        )
+        wavelength = st.number_input("λ (Å)", value=XRAY_SOURCES[source_name], min_value=0.5, max_value=2.5, step=0.0001, format="%.4f", disabled=True)
     else:
-        wavelength = st.number_input(
-            "λ (Å)", 
-            value=1.5406, 
-            min_value=0.5, max_value=2.5, step=0.0001, 
-            format="%.4f"
-        )
+        wavelength = st.number_input("λ (Å)", value=1.5406, min_value=0.5, max_value=2.5, step=0.0001, format="%.4f")
     st.caption(f"≡ {wavelength_to_energy(wavelength):.2f} keV")
 
     st.markdown("---")
@@ -770,7 +734,7 @@ if "jump_to" in st.session_state and st.session_state["jump_to"] != selected_key
 mask = (active_df_raw["two_theta"] >= tt_min) & (active_df_raw["two_theta"] <= tt_max)
 active_df = active_df_raw[mask].copy()
 
-# ✅ DEFINE TABS HERE - BEFORE ANY with tabs[X]: BLOCKS
+# ✅ DEFINE TABS BEFORE ANY with tabs[X]: BLOCKS
 tabs = st.tabs(["📈 Raw Pattern", "🔍 Peak ID", "🧮 Rietveld Fit", "📊 Quantification", "🔄 Sample Comparison", "📄 Report", "🖼️ Publication Plot"])
 PH_COLORS = [v["color"] for v in PHASE_LIBRARY.values()]
 
@@ -890,26 +854,15 @@ with tabs[3]:
             rows.append({"Phase": ph, "Crystal system": pi["system"], "Space group": pi["space_group"], "a (Å)": f"{lp.get('a','—'):.5f}" if isinstance(lp.get('a'), (int,float)) else "—", "c (Å)": f"{lp.get('c','—'):.5f}" if isinstance(lp.get('c'), (int,float)) else "—", "Wt%": f"{fracs.get(ph,0)*100:.2f}", "Role": pi["description"][:65]+"…" if len(pi["description"])>65 else pi["description"]})
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
-# TAB 4 — ENHANCED SAMPLE COMPARISON (Publication-Quality)
+# TAB 4 — ENHANCED SAMPLE COMPARISON
 with tabs[4]:
     st.subheader("🔄 Multi-Sample Comparison")
-    
-    # View mode selection
     view_mode = st.radio("View mode", ["📊 Interactive (Plotly)", "🖼️ Publication-Quality (Matplotlib)"], horizontal=True, key="comp_view_mode")
-    
-    # Sample selection
-    comp_samples = st.multiselect(
-        "Select samples to compare", 
-        options=SAMPLE_KEYS, 
-        default=[k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Printed"][:4],
-        format_func=lambda k: f"[{SAMPLE_CATALOG[k]['short']}] {SAMPLE_CATALOG[k]['label']}",
-        key="comp_samples"
-    )
+    comp_samples = st.multiselect("Select samples to compare", options=SAMPLE_KEYS, default=[k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Printed"][:4], format_func=lambda k: f"[{SAMPLE_CATALOG[k]['short']}] {SAMPLE_CATALOG[k]['label']}", key="comp_samples")
     
     if not comp_samples:
         st.warning("⚠️ Select at least one sample to compare.")
     else:
-        # Common settings for both modes
         col_opt1, col_opt2 = st.columns(2)
         with col_opt1:
             normalize = st.checkbox("✓ Normalise to [0,1]", value=True, key="comp_normalize")
@@ -918,74 +871,36 @@ with tabs[4]:
             line_width = st.slider("Line width", 0.5, 3.0, 1.5, 0.1, key="comp_lw")
             opacity = st.slider("Opacity", 0.3, 1.0, 1.0, 0.1, key="comp_alpha")
         
-        # ── PLOTLY MODE (Interactive) ─────────────────────────────
         if view_mode == "📊 Interactive (Plotly)":
             fig_cmp = go.Figure()
             for k in comp_samples:
-                # Load or generate data
-                if k in all_data:
-                    df_s = all_data[k]
-                else:
-                    # Fallback synthetic data
-                    df_s = pd.DataFrame({
-                        "two_theta": np.linspace(30, 130, 2000),
-                        "intensity": np.random.normal(200, 50, 2000)
-                    })
-                
+                df_s = all_data.get(k, pd.DataFrame({"two_theta": np.linspace(30, 130, 2000), "intensity": np.random.normal(200, 50, 2000)}))
                 x, y = df_s["two_theta"].values, df_s["intensity"].values
                 if normalize and len(y) > 1:
                     y = (y - y.min()) / (y.max() - y.min() + 1e-8)
-                
                 m = SAMPLE_CATALOG[k]
-                fig_cmp.add_trace(go.Scatter(
-                    x=x, y=y, mode="lines", name=m["label"],
-                    line=dict(color=m["color"], width=line_width),
-                    opacity=opacity
-                ))
-            
-            fig_cmp.update_layout(
-                title="XRD Pattern Comparison",
-                xaxis_title="2θ (degrees)",
-                yaxis_title="Normalised Intensity" if normalize else "Intensity (counts)",
-                template="plotly_white" if show_grid else "plotly",
-                height=500,
-                hovermode="x unified",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
+                fig_cmp.add_trace(go.Scatter(x=x, y=y, mode="lines", name=m["label"], line=dict(color=m["color"], width=line_width), opacity=opacity))
+            fig_cmp.update_layout(title="XRD Pattern Comparison", xaxis_title="2θ (degrees)", yaxis_title="Normalised Intensity" if normalize else "Intensity (counts)", template="plotly_white" if show_grid else "plotly", height=500, hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig_cmp, use_container_width=True)
-            
             with st.expander("📋 Comparison Data Summary"):
                 summary_data = []
                 for k in comp_samples:
                     m = SAMPLE_CATALOG[k]
                     df_s = all_data.get(k, pd.DataFrame({"two_theta": [], "intensity": []}))
                     if len(df_s) > 0:
-                        summary_data.append({
-                            "Sample": m["short"],
-                            "Label": m["label"],
-                            "Fabrication": m["fabrication"],
-                            "Treatment": m["treatment"],
-                            "Points": len(df_s),
-                            "2θ Range": f"{df_s['two_theta'].min():.1f}–{df_s['two_theta'].max():.1f}°",
-                            "Max Intensity": f"{df_s['intensity'].max():.0f}" if len(df_s) > 0 else "N/A"
-                        })
+                        summary_data.append({"Sample": m["short"], "Label": m["label"], "Fabrication": m["fabrication"], "Treatment": m["treatment"], "Points": len(df_s), "2θ Range": f"{df_s['two_theta'].min():.1f}–{df_s['two_theta'].max():.1f}°", "Max Intensity": f"{df_s['intensity'].max():.0f}"})
                 st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
-        
-        # ── MATPLOTLIB MODE (Publication-Quality) ─────────────────
         else:
             st.markdown("### 🎨 Publication Plot Settings")
             col_pub1, col_pub2, col_pub3 = st.columns(3)
-            
             with col_pub1:
-                pub_width = st.slider("Width (inches)", 6, 14, 10, 0.5, key="pub_comp_w")
+                pub_width = st.slider("Width (inches)", 6.0, 14.0, 10.0, 0.5, key="pub_comp_w")
                 pub_font = st.slider("Font Size", 8, 18, 11, 1, key="pub_comp_font")
                 stack_offset = st.slider("Stack offset", 0.0, 1.5, 0.0, 0.1, key="pub_comp_stack", help="0 = overlay, >0 = waterfall stacking")
-            
             with col_pub2:
-                pub_height = st.slider("Height (inches)", 5, 12, 7, 0.5, key="pub_comp_h")
+                pub_height = st.slider("Height (inches)", 5.0, 12.0, 7.0, 0.5, key="pub_comp_h")
                 pub_legend_pos = st.selectbox("Legend", ["best", "upper right", "upper left", "lower left", "lower right", "center right", "off"], key="pub_comp_leg")
                 export_fmt = st.selectbox("Export", ["PDF", "PNG", "EPS"], key="pub_comp_fmt")
-            
             with col_pub3:
                 st.markdown("**🎨 Per-Sample Styling**")
                 sample_styles = {}
@@ -999,79 +914,38 @@ with tabs[4]:
                             "label": st.text_input("Legend Label", m["label"], key=f"lbl_{k}")
                         }
             
-            # Prepare data for plotting
             sample_data_list = []
             legend_labels = []
             line_styles = []
-            
             for k in comp_samples:
-                if k in all_data:
-                    df_s = all_data[k]
-                else:
-                    df_s = pd.DataFrame({
-                        "two_theta": np.linspace(30, 130, 2000),
-                        "intensity": np.random.normal(200, 50, 2000)
-                    })
-                
+                df_s = all_data.get(k, pd.DataFrame({"two_theta": np.linspace(30, 130, 2000), "intensity": np.random.normal(200, 50, 2000)}))
                 styles = sample_styles.get(k, {})
-                sample_data_list.append({
-                    "two_theta": df_s["two_theta"].values,
-                    "intensity": df_s["intensity"].values,
-                    "label": SAMPLE_CATALOG[k]["label"],
-                    "color": styles.get("color", SAMPLE_CATALOG[k]["color"]),
-                    "linewidth": styles.get("width", line_width)
-                })
+                sample_data_list.append({"two_theta": df_s["two_theta"].values, "intensity": df_s["intensity"].values, "label": SAMPLE_CATALOG[k]["label"], "color": styles.get("color", SAMPLE_CATALOG[k]["color"]), "linewidth": styles.get("width", line_width)})
                 legend_labels.append(styles.get("label", SAMPLE_CATALOG[k]["label"]))
                 line_styles.append(styles.get("style", "-"))
             
-            # Generate publication plot
             try:
                 fig_pub, ax_pub = plot_sample_comparison_publication(
-                    sample_data_list=sample_data_list,
-                    tt_min=tt_min,
-                    tt_max=tt_max,
-                    figsize=(pub_width, pub_height),
-                    font_size=pub_font,
+                    sample_data_list=sample_data_list, tt_min=tt_min, tt_max=tt_max,
+                    figsize=(pub_width, pub_height), font_size=pub_font,
                     legend_pos=pub_legend_pos if pub_legend_pos != "off" else "off",
-                    normalize=normalize,
-                    stack_offset=stack_offset,
-                    line_styles=line_styles,
-                    legend_labels=legend_labels
+                    normalize=normalize, stack_offset=stack_offset,
+                    line_styles=line_styles, legend_labels=legend_labels,
+                    show_grid=show_grid
                 )
-                
-                if show_grid:
-                    ax_pub.grid(True, linestyle=':', linewidth=0.5, alpha=0.7)
-                
                 st.pyplot(fig_pub, dpi=150, use_container_width=True)
-                
-                # Export buttons
                 st.markdown("#### 📥 Export Publication Figure")
                 col_e1, col_e2, col_e3 = st.columns(3)
-                
                 with col_e1:
-                    buf = io.BytesIO()
-                    fig_pub.savefig(buf, format='pdf', bbox_inches='tight')
-                    buf.seek(0)
-                    st.download_button("📄 PDF", buf.read(), 
-                                     file_name=f"xrd_comparison_{len(comp_samples)}samples.pdf",
-                                     mime="application/pdf", use_container_width=True)
+                    buf = io.BytesIO(); fig_pub.savefig(buf, format='pdf', bbox_inches='tight'); buf.seek(0)
+                    st.download_button("📄 PDF", buf.read(), file_name=f"xrd_comparison_{len(comp_samples)}samples.pdf", mime="application/pdf", use_container_width=True)
                 with col_e2:
-                    buf = io.BytesIO()
-                    fig_pub.savefig(buf, format='png', dpi=300, bbox_inches='tight')
-                    buf.seek(0)
-                    st.download_button("🖼️ PNG (300 DPI)", buf.read(), 
-                                     file_name=f"xrd_comparison_{len(comp_samples)}samples.png",
-                                     mime="image/png", use_container_width=True)
+                    buf = io.BytesIO(); fig_pub.savefig(buf, format='png', dpi=300, bbox_inches='tight'); buf.seek(0)
+                    st.download_button("🖼️ PNG (300 DPI)", buf.read(), file_name=f"xrd_comparison_{len(comp_samples)}samples.png", mime="image/png", use_container_width=True)
                 with col_e3:
-                    buf = io.BytesIO()
-                    fig_pub.savefig(buf, format='eps', bbox_inches='tight')
-                    buf.seek(0)
-                    st.download_button("📐 EPS", buf.read(), 
-                                     file_name=f"xrd_comparison_{len(comp_samples)}samples.eps",
-                                     mime="application/postscript", use_container_width=True)
-                
+                    buf = io.BytesIO(); fig_pub.savefig(buf, format='eps', bbox_inches='tight'); buf.seek(0)
+                    st.download_button("📐 EPS", buf.read(), file_name=f"xrd_comparison_{len(comp_samples)}samples.eps", mime="application/postscript", use_container_width=True)
                 plt.close(fig_pub)
-                
             except Exception as e:
                 st.error(f"❌ Plot generation failed: {str(e)}")
                 st.code("Tip: Try reducing the number of samples or resetting font size.")
@@ -1093,26 +967,18 @@ with tabs[5]:
         export_df.to_csv(csv_buf, index=False)
         col_dl2.download_button("⬇️ Download Fit Data (.csv)", data=csv_buf.getvalue(), file_name=f"rietveld_fit_{samp}.csv", mime="text/csv")
 
-# TAB 6 — PUBLICATION-QUALITY PLOT (ENHANCED & BUG-FIXED)
+# TAB 6 — PUBLICATION-QUALITY PLOT (SINGLE SAMPLE)
 with tabs[6]:
     st.subheader("🖼️ Publication-Quality Plot (matplotlib)")
     st.caption("Generate journal-ready figures with customizable phase markers, legend control & spacing")
     
-    # Check if refinement results exist
     if "last_result" not in st.session_state or "last_phases" not in st.session_state:
         st.info("🔬 Run the Rietveld refinement first (Tab 3: 🧮 Rietveld Fit) to enable publication plotting.")
-        st.markdown("""
-        **Quick steps:**
-        1. Select a sample in the sidebar
-        2. Choose phases to refine (e.g., FCC-Co, M23C6)
-        3. Click **▶ Run Rietveld Refinement**
-        4. Return here to generate your publication plot
-        """)
+        st.markdown("""**Quick steps:** 1. Select a sample in the sidebar 2. Choose phases to refine 3. Click **▶ Run Rietveld Refinement** 4. Return here.""")
     else:
         result = st.session_state["last_result"]
         phases = st.session_state["last_phases"]
         
-        # ── Layout Controls ─────────────────────────────────────
         col1, col2, col3 = st.columns(3)
         with col1:
             fig_width = st.slider("Figure width (inches)", 6.0, 14.0, 10.0, 0.5, key="pub_width")
@@ -1121,19 +987,12 @@ with tabs[6]:
         with col2:
             fig_height = st.slider("Figure height (inches)", 5.0, 12.0, 7.0, 0.5, key="pub_height")
             show_hkl = st.checkbox("Show hkl labels", value=True, key="pub_hkl")
-            legend_pos = st.selectbox("Legend Position", 
-                                      ["best", "upper right", "upper left", "lower left", "lower right", 
-                                       "center right", "center left", "lower center", "upper center", "center", "off"],
-                                      index=0, key="pub_legend_pos")
+            legend_pos = st.selectbox("Legend Position", ["best", "upper right", "upper left", "lower left", "lower right", "center right", "center left", "lower center", "upper center", "center", "off"], index=0, key="pub_legend_pos")
         with col3:
             export_format = st.selectbox("Export format", ["PDF", "PNG", "EPS"], index=0, key="pub_format")
-            # ✅ NEW: Marker row spacing control
-            marker_spacing = st.slider("Marker row spacing", 0.8, 2.5, 1.3, 0.1, 
-                                      help="Vertical distance between phase marker rows",
-                                      key="pub_spacing")
+            marker_spacing = st.slider("Marker row spacing", 0.8, 2.5, 1.3, 0.1, help="Vertical distance between phase marker rows", key="pub_spacing")
             st.markdown("**🎨 Phase Customization**")
             
-        # ✅ NEW: Legend control section
         st.markdown("### 📋 Legend Control")
         st.caption("Select which phases to include in the plot legend (uncheck to hide from legend)")
         n_cols = min(4, len(phases))
@@ -1145,89 +1004,40 @@ with tabs[6]:
                 if st.checkbox(f"✓ {ph}", value=True, key=f"leg_{ph}"):
                     legend_phases_selected.append(ph)
         
-        # Build phase_data list with user customizations
         phase_data = []
         for i, ph in enumerate(phases):
             pk_df = generate_theoretical_peaks(ph, wavelength, tt_min, tt_max)
-            
             with st.expander(f"⚙️ Settings for **{ph}**", expanded=(i==0)):
                 c_col, c_shape = st.columns(2)
                 custom_color = c_col.color_picker("Color", value=PHASE_LIBRARY[ph]["color"], key=f"col_{ph}")
-                # ✅ UPDATED: Square (s) and Diamond (d) now available
                 shape_options = ["|", "_", "s", "^", "v", "d", "x", "+", "*"]
                 default_idx = shape_options.index(PHASE_LIBRARY[ph].get("marker_shape", "|"))
-                custom_shape = c_shape.selectbox("Marker Shape", shape_options, 
-                                                 index=default_idx, key=f"shp_{ph}",
-                                                 help="| = vertical bar, _ = horizontal, s = square ■, d = diamond ◆")
+                custom_shape = c_shape.selectbox("Marker Shape", shape_options, index=default_idx, key=f"shp_{ph}", help="| = vertical bar, _ = horizontal, s = square ■, d = diamond ◆")
+            phase_data.append({"name": ph, "positions": pk_df["two_theta"].values if len(pk_df) > 0 else np.array([]), "color": custom_color, "marker_shape": custom_shape, "hkl": [hkl.strip("()").split(",") if hkl else None for hkl in pk_df["hkl_label"].values] if show_hkl and len(pk_df) > 0 else None})
             
-            phase_data.append({
-                "name": ph,
-                "positions": pk_df["two_theta"].values if len(pk_df) > 0 else np.array([]),
-                "color": custom_color,
-                "marker_shape": custom_shape,
-                "hkl": [hkl.strip("()").split(",") if hkl else None for hkl in pk_df["hkl_label"].values] if show_hkl and len(pk_df) > 0 else None
-            })
-            
-        # Generate the plot
         try:
             fig, ax = plot_rietveld_publication(
-                active_df["two_theta"].values,
-                active_df["intensity"].values,
-                result["y_calc"],
-                active_df["intensity"].values - result["y_calc"],
-                phase_data,
-                offset_factor=offset_factor,
-                figsize=(fig_width, fig_height),
-                font_size=font_size,
-                legend_pos=legend_pos,
-                marker_row_spacing=marker_spacing,
+                active_df["two_theta"].values, active_df["intensity"].values,
+                result["y_calc"], active_df["intensity"].values - result["y_calc"],
+                phase_data, offset_factor=offset_factor, figsize=(fig_width, fig_height),
+                font_size=font_size, legend_pos=legend_pos, marker_row_spacing=marker_spacing,
                 legend_phases=legend_phases_selected if legend_phases_selected else None
             )
             st.pyplot(fig, dpi=150, use_container_width=True)
-            
-            # Export buttons
             st.markdown("#### 📥 Export Options")
             col_e1, col_e2, col_e3 = st.columns(3)
-            
             with col_e1:
-                buf = io.BytesIO()
-                fig.savefig(buf, format='pdf', bbox_inches='tight')
-                buf.seek(0)
-                st.download_button("📄 PDF", buf.read(), 
-                                 file_name=f"rietveld_pub_{selected_key}.pdf",
-                                 mime="application/pdf", use_container_width=True)
+                buf = io.BytesIO(); fig.savefig(buf, format='pdf', bbox_inches='tight'); buf.seek(0)
+                st.download_button("📄 PDF", buf.read(), file_name=f"rietveld_pub_{selected_key}.pdf", mime="application/pdf", use_container_width=True)
             with col_e2:
-                buf = io.BytesIO()
-                fig.savefig(buf, format='png', dpi=300, bbox_inches='tight')
-                buf.seek(0)
-                st.download_button("🖼️ PNG (300 DPI)", buf.read(), 
-                                 file_name=f"rietveld_pub_{selected_key}.png",
-                                 mime="image/png", use_container_width=True)
+                buf = io.BytesIO(); fig.savefig(buf, format='png', dpi=300, bbox_inches='tight'); buf.seek(0)
+                st.download_button("🖼️ PNG (300 DPI)", buf.read(), file_name=f"rietveld_pub_{selected_key}.png", mime="image/png", use_container_width=True)
             with col_e3:
-                buf = io.BytesIO()
-                fig.savefig(buf, format='eps', bbox_inches='tight')
-                buf.seek(0)
-                st.download_button("📐 EPS", buf.read(), 
-                                 file_name=f"rietveld_pub_{selected_key}.eps",
-                                 mime="application/postscript", use_container_width=True)
-            
-            # Marker reference
+                buf = io.BytesIO(); fig.savefig(buf, format='eps', bbox_inches='tight'); buf.seek(0)
+                st.download_button("📐 EPS", buf.read(), file_name=f"rietveld_pub_{selected_key}.eps", mime="application/postscript", use_container_width=True)
             with st.expander("🎨 Marker Shape Reference"):
-                st.markdown("""
-                | Shape | Code | Visual | Recommended Use |
-                |-------|------|--------|----------------|
-                | Vertical bar | `|` | │ | FCC-Co matrix (primary) |
-                | Horizontal bar | `_` | ─ | HCP-Co (secondary) |
-                | **Square** ✨ | `s` | ■ | M₂₃C₆ carbides |
-                | Triangle up | `^` | ▲ | Sigma phase |
-                | Triangle down | `v` | ▼ | Additional precipitates |
-                | **Diamond** ✨ | `d` | ◆ | Trace intermetallics |
-                | Cross | `x` | × | Reference peaks |
-                | Plus | `+` | + | Calibration markers |
-                | Star | `*` | ✦ | Special annotations |
-                """)
-            plt.close(fig)  # Free memory
-            
+                st.markdown("""| Shape | Code | Visual | Recommended Use |\n|-------|------|--------|----------------|\n| Vertical bar | `|` | │ | FCC-Co matrix (primary) |\n| Horizontal bar | `_` | ─ | HCP-Co (secondary) |\n| **Square** ✨ | `s` | ■ | M₂₃C₆ carbides |\n| Triangle up | `^` | ▲ | Sigma phase |\n| Triangle down | `v` | ▼ | Additional precipitates |\n| **Diamond** ✨ | `d` | ◆ | Trace intermetallics |\n| Cross | `x` | × | Reference peaks |\n| Plus | `+` | + | Calibration markers |\n| Star | `*` | ✦ | Special annotations |""")
+            plt.close(fig)
         except Exception as e:
             st.error(f"❌ Plot generation failed: {str(e)}")
             st.code("Tip: Try reducing the number of phases or resetting font size to default.")
