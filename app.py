@@ -509,7 +509,8 @@ with st.sidebar:
                             index=3)
    
     if source_option == "Demo samples":
-        if selected_key in all_
+        # ✅ FIXED: Changed 'all_' to 'all_data'
+        if selected_key in all_data:
             active_df_raw = all_data[selected_key]
             st.success(f"📌 Sample **{selected_key}** — {meta['label']}")
         else:
@@ -848,7 +849,7 @@ with tabs[6]:
         with col1:
             fig_width = st.slider("Figure width (inches)", 6.0, 14.0, 10.0, 0.5)
             offset_factor = st.slider("Difference curve offset", 0.05, 0.25, 0.12, 0.01)
-            # ✅ INCREASED FONT SIZE RANGE
+            # ✅ INCREASED FONT SIZE RANGE (6 to 22)
             font_size = st.slider("Global Font Size", 6, 22, 11)
         with col2:
             fig_height = st.slider("Figure height (inches)", 5.0, 12.0, 7.0, 0.5)
