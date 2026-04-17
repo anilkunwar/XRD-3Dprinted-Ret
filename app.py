@@ -42,6 +42,17 @@ SAMPLE_CATALOG = {
 SAMPLE_KEYS = list(SAMPLE_CATALOG.keys())
 GROUPS = {"Printed": [k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Printed"], "Reference": [k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Reference"]}
 
+# Common X-ray sources with Kα₁ wavelengths
+XRAY_SOURCES = {
+    "Cu Kα₁ (1.5406 Å)": 1.5406,
+    "Co Kα₁ (1.7890 Å)": 1.7890,
+    "Mo Kα₁ (0.7093 Å)": 0.7093,
+    "Fe Kα₁ (1.9374 Å)": 1.9374,
+    "Cr Kα₁ (2.2909 Å)": 2.2909,
+    "Ag Kα₁ (0.5594 Å)": 0.5594,
+    "Custom Wavelength": None
+}
+
 PHASE_LIBRARY = {
     "FCC-Co": {
         "system": "Cubic", "space_group": "Fm-3m", "lattice": {"a": 3.544},
@@ -246,7 +257,7 @@ def download_github_file(url: str) -> bytes:
         return b""
 
 @st.cache_data
-def find_github_file_by_catalog_key(catalog_key: str, gh_files: list) -> dict | None:
+def find_github_file_by_catalog_key(catalog_key: str, gh_files: list):
     """Match SAMPLE_CATALOG entry to GitHub file list (case-insensitive)"""
     target = SAMPLE_CATALOG[catalog_key]["filename"].upper()
     for f in gh_files:
@@ -584,10 +595,29 @@ with st.sidebar:
         else:
             st.warning("⚠️ Generating synthetic XRD pattern for demonstration.")
     
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 🔬 INSTRUMENT & WAVELENGTH SELECTION (UPDATED)
+    # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
     st.subheader("🔬 Instrument")
-    wavelength = st.number_input("λ (Å)", value=1.5406, min_value=0.5, max_value=2.5, step=0.0001, format="%.4f", help="Cu Kα₁ = 1.5406 Å")
+    
+    source_name = st.selectbox("X-ray Source Tube", list(XRAY_SOURCES.keys()), index=0)
+    if source_name != "Custom Wavelength":
+        wavelength = st.number_input(
+            "λ (Å)", 
+            value=XRAY_SOURCES[source_name], 
+            min_value=0.5, max_value=2.5, step=0.0001, 
+            format="%.4f", disabled=True
+        )
+    else:
+        wavelength = st.number_input(
+            "λ (Å)", 
+            value=1.5406, 
+            min_value=0.5, max_value=2.5, step=0.0001, 
+            format="%.4f"
+        )
     st.caption(f"≡ {wavelength_to_energy(wavelength):.2f} keV")
+
     st.markdown("---")
     st.subheader("🧪 Phases")
     selected_phases = []
