@@ -10,4 +10,4 @@ pandas
 plotly
 requests
 matplotlib
-streamlit run RETVIELD.py
+streamlit 
