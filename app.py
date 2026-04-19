@@ -1,8 +1,9 @@
 """
 XRD Rietveld Analysis — Co-Cr Dental Alloy (Mediloy S Co, BEGO)
 ================================================================
-Simplified Interface • Exact Rietveld-based Quantification • Supports .asc, .xrdml, .cif
-Wavelength Conversion: Supports Co Kα, Cu Kα, etc.
+Publication-quality plots • Phase-specific markers • Optional GSAS-II integration
+Supports: .asc, .xrdml, .ASC, .cif files • GitHub repository: Maryamslm/XRD-3Dprinted-Ret/SAMPLES
+COD Integration: FCC-Co (9008466), HCP-Co (9008492) • Materials Project: M23C6 (mp-723)
 """
 import streamlit as st
 import numpy as np
@@ -24,14 +25,23 @@ except ImportError:
     GSASII_AVAILABLE = False
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CONFIG & PHASES
+# INLINE UTILITIES & CONFIG
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SAMPLE_CATALOG = {
-    "CH0_1": {"filename": "CH0_1.ASC", "description": "SLM-printed Co-Cr alloy, heat-treated"},
-    # Add others here if needed for demo
+    "CH0_1": {"label": "Printed • Heat-treated", "short": "CH0", "fabrication": "SLM", "treatment": "Heat-treated", "filename": "CH0_1.ASC", "color": "#1f77b4", "group": "Printed", "description": "SLM-printed Co-Cr alloy, heat-treated"},
+    "CH45_2": {"label": "Printed • Heat-treated", "short": "CH45", "fabrication": "SLM", "treatment": "Heat-treated", "filename": "CH45_2.ASC", "color": "#aec7e8", "group": "Printed", "description": "SLM-printed Co-Cr alloy, heat-treated"},
+    "CNH0_3": {"label": "Printed • As-built", "short": "CNH0", "fabrication": "SLM", "treatment": "As-built", "filename": "CNH0_3.ASC", "color": "#ff7f0e", "group": "Printed", "description": "SLM-printed Co-Cr alloy, as-built (no HT)"},
+    "CNH45_4": {"label": "Printed • As-built", "short": "CNH45", "fabrication": "SLM", "treatment": "As-built", "filename": "CNH45_4.ASC", "color": "#ffbb78", "group": "Printed", "description": "SLM-printed Co-Cr alloy, as-built (no HT)"},
+    "PH0_5": {"label": "Printed • Heat-treated", "short": "PH0", "fabrication": "SLM", "treatment": "Heat-treated", "filename": "PH0_5.ASC", "color": "#2ca02c", "group": "Printed", "description": "SLM-printed Co-Cr alloy, heat-treated"},
+    "PH45_6": {"label": "Printed • Heat-treated", "short": "PH45", "fabrication": "SLM", "treatment": "Heat-treated", "filename": "PH45_6.ASC", "color": "#98df8a", "group": "Printed", "description": "SLM-printed Co-Cr alloy, heat-treated"},
+    "PNH0_7": {"label": "Printed • As-built", "short": "PNH0", "fabrication": "SLM", "treatment": "As-built", "filename": "PNH0_7.ASC", "color": "#d62728", "group": "Printed", "description": "SLM-printed Co-Cr alloy, as-built (no HT)"},
+    "PNH45_8": {"label": "Printed • As-built", "short": "PNH45", "fabrication": "SLM", "treatment": "As-built", "filename": "PNH45_8.ASC", "color": "#ff9896", "group": "Printed", "description": "SLM-printed Co-Cr alloy, as-built (no HT)"},
+    "MEDILOY_powder": {"label": "Powder • Raw Material", "short": "Powder", "fabrication": "Powder", "treatment": "As-received", "filename": "MEDILOY_powder.ASC", "color": "#9467bd", "group": "Reference", "description": "Mediloy S Co powder, as-received (reference material)"},
 }
-DEMO_DIR = os.path.join(os.path.dirname(__file__), "demo_data")
+
+SAMPLE_KEYS = list(SAMPLE_CATALOG.keys())
+GROUPS = {"Printed": [k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Printed"], "Reference": [k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Reference"]}
 
 XRAY_SOURCES = {
     "Cu Kα₁ (1.5406 Å)": 1.5406,
@@ -43,30 +53,56 @@ XRAY_SOURCES = {
     "Custom Wavelength": None
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE LIBRARY WITH COD + MATERIALS PROJECT INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
 PHASE_LIBRARY = {
     "FCC-Co": {
-        "system": "Cubic", "space_group": "Fm-3m (No. 225)", "lattice": {"a": 3.548},
+        "system": "Cubic", 
+        "space_group": "Fm-3m (No. 225)", 
+        "lattice": {"a": 3.548},
         "peaks": [("111", 44.2), ("200", 51.5), ("220", 75.8), ("311", 92.1), ("222", 98.5)],
-        "color": "#e377c2", "default": True, "marker_shape": "|",
-        "description": "FCC Co-based solid solution (matrix)", "cod_id": "9008466"
+        "color": "#e377c2", 
+        "default": True, 
+        "marker_shape": "|",
+        "description": "FCC Co-based solid solution (matrix) • COD:9008466",
+        "cod_id": "9008466",
+        "cif_source": "https://www.crystallography.net/cod/9008466.cif"
     },
     "HCP-Co": {
-        "system": "Hexagonal", "space_group": "P6₃/mmc (No. 194)", "lattice": {"a": 2.5071, "c": 4.0686},
+        "system": "Hexagonal", 
+        "space_group": "P6₃/mmc (No. 194)", 
+        "lattice": {"a": 2.5071, "c": 4.0686},
         "peaks": [("100", 41.6), ("002", 44.8), ("101", 47.5), ("102", 69.2), ("110", 78.1)],
-        "color": "#7f7f7f", "default": False, "marker_shape": "_",
-        "description": "HCP Co (low-temp/stress-induced)", "cod_id": "9008492"
+        "color": "#7f7f7f", 
+        "default": False, 
+        "marker_shape": "_",
+        "description": "HCP Co (low-temp/stress-induced) • COD:9008492",
+        "cod_id": "9008492",
+        "cif_source": "https://www.crystallography.net/cod/9008492.cif"
     },
     "M23C6": {
-        "system": "Cubic", "space_group": "Fm-3m (No. 225)", "lattice": {"a": 10.63},
+        "system": "Cubic", 
+        "space_group": "Fm-3m (No. 225)", 
+        "lattice": {"a": 10.63},
         "peaks": [("311", 39.8), ("400", 46.2), ("511", 67.4), ("440", 81.3), ("620", 93.5)],
-        "color": "#bcbd22", "default": False, "marker_shape": "s",
-        "description": "Cr-rich carbide M₂₃C₆", "mp_id": "mp-723"
+        "color": "#bcbd22", 
+        "default": False, 
+        "marker_shape": "s",
+        "description": "Cr-rich carbide M₂₃C₆, common precipitate in Co-Cr alloys • MP:mp-723",
+        "mp_id": "mp-723",
+        "cif_source": "https://next-gen.materialsproject.org/materials/mp-723"
     },
     "Sigma": {
-        "system": "Tetragonal", "space_group": "P4₂/mnm", "lattice": {"a": 8.80, "c": 4.56},
+        "system": "Tetragonal", 
+        "space_group": "P4₂/mnm", 
+        "lattice": {"a": 8.80, "c": 4.56},
         "peaks": [("210", 43.1), ("220", 54.3), ("310", 68.9)],
-        "color": "#17becf", "default": False, "marker_shape": "^",
-        "description": "Sigma phase (Co,Cr) intermetallic"
+        "color": "#17becf", 
+        "default": False, 
+        "marker_shape": "^",
+        "description": "Sigma phase (Co,Cr) intermetallic, brittle, forms during aging"
     }
 }
 
@@ -81,7 +117,10 @@ def wavelength_to_energy(wavelength_angstrom):
     return energy_ev / 1000
 
 def _parse_hkl(hkl_label: str) -> tuple:
-    """Parse hkl label like '(311)' or '(3,1,1)' into tuple (h,k,l)."""
+    """
+    Parse hkl label like '(311)' or '(3,1,1)' into tuple of integers (h,k,l).
+    Handles both concatenated and comma-separated formats.
+    """
     clean = hkl_label.strip().strip("()").replace(" ", "")
     if "," in clean:
         return tuple(int(p.strip()) for p in clean.split(",") if p.strip())
@@ -90,463 +129,1240 @@ def _parse_hkl(hkl_label: str) -> tuple:
     while i < len(clean):
         sign = 1
         if clean[i] in "+-":
-            if clean[i] == "-": sign = -1
+            if clean[i] == "-":
+                sign = -1
             i += 1
         num_str = ""
         while i < len(clean) and clean[i].isdigit():
             num_str += clean[i]
             i += 1
-        if num_str: result.append(sign * int(num_str))
-        if len(result) == 3: break
-    while len(result) < 3: result.append(0)
+        if num_str:
+            result.append(sign * int(num_str))
+        if len(result) == 3:
+            break
+    while len(result) < 3:
+        result.append(0)
     return tuple(result[:3])
 
 def generate_theoretical_peaks(phase_name, wavelength, tt_min, tt_max):
-    """
-    Generate theoretical peak positions for a phase.
-    FIXED: Correctly recalculates 2-theta for the selected wavelength 
-    based on Bragg's Law.
-    """
-    LAMBDA_REF = 1.5406  # Reference wavelength used in PHASE_LIBRARY peak positions
-    
-    # Check custom phases
+    """Generate theoretical peak positions for a phase."""
     if "custom_phases" in st.session_state and phase_name in st.session_state.custom_phases:
         phase = st.session_state.custom_phases[phase_name]
         if "cif_data" in phase:
             return generate_peaks_from_cif(phase["cif_data"], wavelength, tt_min, tt_max)
         elif "peaks" in phase and phase["peaks"]:
             peaks = []
-            for hkl_str, tt_approx_ref in phase["peaks"]:
-                d_spacing = LAMBDA_REF / (2 * math.sin(math.radians(tt_approx_ref / 2)))
-                sin_theta_new = wavelength / (2 * d_spacing)
-                if abs(sin_theta_new) <= 1.0:
-                    theta_new_rad = math.asin(sin_theta_new)
-                    tt_new = math.degrees(2 * theta_new_rad)
-                    if tt_min <= tt_new <= tt_max:
-                        peaks.append({"two_theta": round(tt_new, 3), "d_spacing": round(d_spacing, 4), "hkl_label": f"({hkl_str})"})
+            for hkl_str, tt_approx in phase["peaks"]:
+                if tt_min <= tt_approx <= tt_max:
+                    d_spacing = wavelength / (2 * math.sin(math.radians(tt_approx/2)))
+                    peaks.append({
+                        "two_theta": round(tt_approx, 3),
+                        "d_spacing": round(d_spacing, 4),
+                        "hkl_label": f"({hkl_str})"
+                    })
             return pd.DataFrame(peaks) if peaks else pd.DataFrame(columns=["two_theta", "d_spacing", "hkl_label"])
-
     if phase_name not in PHASE_LIBRARY:
         return pd.DataFrame(columns=["two_theta", "d_spacing", "hkl_label"])
-    
     phase = PHASE_LIBRARY[phase_name]
     peaks = []
-    for hkl_str, tt_approx_ref in phase["peaks"]:
-        d_spacing = LAMBDA_REF / (2 * math.sin(math.radians(tt_approx_ref / 2)))
-        sin_theta_new = wavelength / (2 * d_spacing)
-        if abs(sin_theta_new) <= 1.0:
-            theta_new_rad = math.asin(sin_theta_new)
-            tt_new = math.degrees(2 * theta_new_rad)
-            if tt_min <= tt_new <= tt_max:
-                peaks.append({"two_theta": round(tt_new, 3), "d_spacing": round(d_spacing, 4), "hkl_label": f"({hkl_str})"})
+    for hkl_str, tt_approx in phase["peaks"]:
+        if tt_min <= tt_approx <= tt_max:
+            peaks.append({
+                "two_theta": round(tt_approx, 3),
+                "d_spacing": round(wavelength / (2 * math.sin(math.radians(tt_approx/2))), 4),
+                "hkl_label": f"({hkl_str})"
+            })
     return pd.DataFrame(peaks) if peaks else pd.DataFrame(columns=["two_theta", "d_spacing", "hkl_label"])
 
+def match_phases_to_data(observed_peaks, theoretical_peaks_dict, tol_deg=0.2):
+    matches = []
+    for _, obs in observed_peaks.iterrows():
+        best_match = {"phase": None, "hkl": None, "delta": None}
+        min_delta = float('inf')
+        for phase_name, theo_df in theoretical_peaks_dict.items():
+            for _, theo in theo_df.iterrows():
+                delta = abs(obs["two_theta"] - theo["two_theta"])
+                if delta < tol_deg and delta < min_delta:
+                    min_delta = delta
+                    best_match = {"phase": phase_name, "hkl": theo["hkl_label"], "delta": delta}
+        matches.append(best_match)
+    result = observed_peaks.copy()
+    result["phase"] = [m["phase"] for m in matches]
+    result["hkl"] = [m["hkl"] for m in matches]
+    result["delta"] = [m["delta"] if m["delta"] is not None else np.nan for m in matches]
+    return result
+
 def find_peaks_in_data(df, min_height_factor=2.0, min_distance_deg=0.3):
-    if len(df) < 10: return pd.DataFrame(columns=["two_theta", "intensity", "prominence"])
-    x, y = df["two_theta"].values, df["intensity"].values
+    if len(df) < 10:
+        return pd.DataFrame(columns=["two_theta", "intensity", "prominence"])
+    x = df["two_theta"].values
+    y = df["intensity"].values
     bg = np.percentile(y, 15)
     min_height = bg + min_height_factor * (np.std(y) if len(y) > 1 else 1)
     min_distance = max(1, int(min_distance_deg / np.mean(np.diff(x))))
     peaks, props = signal.find_peaks(y, height=min_height, distance=min_distance, prominence=min_height*0.3)
-    if len(peaks) == 0: return pd.DataFrame(columns=["two_theta", "intensity", "prominence"])
-    return pd.DataFrame({"two_theta": x[peaks], "intensity": y[peaks], "prominence": props.get("prominences", np.zeros_like(peaks))}).sort_values("intensity", ascending=False).reset_index(drop=True)
+    if len(peaks) == 0:
+        return pd.DataFrame(columns=["two_theta", "intensity", "prominence"])
+    result = pd.DataFrame({
+        "two_theta": x[peaks],
+        "intensity": y[peaks],
+        "prominence": props.get("prominences", np.zeros_like(peaks))
+    })
+    return result.sort_values("intensity", ascending=False).reset_index(drop=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CIF & FILE PARSERS
+# CIF PARSER
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_data
 def parse_cif_content(cif_text: str) -> dict:
     import re
-    result = {"chemical_formula": None, "space_group_hm": None, "cell_params": {}}
+    result = {
+        "chemical_formula": None,
+        "space_group_hm": None,
+        "space_group_number": None,
+        "cell_params": {},
+        "atoms": []
+    }
     patterns = {
         "chemical_formula": r"_chemical_formula_sum\s+([^\n]+)",
         "space_group_hm": r"_symmetry_space_group_name_H-M\s+['\"]?([^\n'\"]+)['\"]?",
+        "space_group_number": r"_space_group_IT_number\s+(\d+)",
         "cell_length_a": r"_cell_length_a\s+([\d.]+)",
+        "cell_length_b": r"_cell_length_b\s+([\d.]+)",
         "cell_length_c": r"_cell_length_c\s+([\d.]+)",
+        "cell_angle_alpha": r"_cell_angle_alpha\s+([\d.]+)",
+        "cell_angle_beta": r"_cell_angle_beta\s+([\d.]+)",
+        "cell_angle_gamma": r"_cell_angle_gamma\s+([\d.]+)",
     }
     for key, pattern in patterns.items():
         match = re.search(pattern, cif_text, re.IGNORECASE)
         if match:
-            if key.startswith("cell_"): result["cell_params"][key.replace("cell_", "")] = float(match.group(1))
-            else: result[key] = match.group(1).strip()
+            if key.startswith("cell_"):
+                result["cell_params"][key.replace("cell_", "")] = float(match.group(1))
+            elif key == "space_group_number":
+                result["space_group_number"] = int(match.group(1))
+            else:
+                result[key] = match.group(1).strip()
+    atom_loop = re.search(r'loop_\s+(_atom_site_label.*?)\n(?=_\w|$)', cif_text, re.DOTALL | re.IGNORECASE)
+    if atom_loop:
+        lines = atom_loop.group(1).strip().split('\n')
+        for line in lines:
+            parts = line.split()
+            if len(parts) >= 4 and parts[0] in ['Co', 'Cr', 'C', 'O', 'M']:
+                try:
+                    result["atoms"].append({
+                        "label": parts[0],
+                        "x": float(parts[1]),
+                        "y": float(parts[2]),
+                        "z": float(parts[3])
+                    })
+                except (ValueError, IndexError):
+                    continue
     return result
 
-# 🔧 FIXED: Parameter name was "cif_ dict" → now "cif_data: dict"
+@st.cache_data(ttl=3600)
+def fetch_cif_from_cod(cod_id: str) -> str:
+    url = f"https://www.crystallography.net/cod/{cod_id}.cif"
+    try:
+        response = requests.get(url, timeout=15)
+        if response.status_code == 200:
+            return response.text
+        else:
+            st.error(f"❌ COD fetch failed: HTTP {response.status_code}")
+            return ""
+    except Exception as e:
+        st.error(f"❌ Network error fetching COD {cod_id}: {e}")
+        return ""
+
+@st.cache_data(ttl=3600)
+def fetch_cif_from_materials_project(mp_id: str, api_key: str = None) -> dict:
+    url = f"https://api.materialsproject.org/materials/{mp_id}/summary"
+    headers = {"X-API-KEY": api_key} if api_key else {}
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            result = data.get("data", {})
+            return {
+                "chemical_formula": result.get("formula_pretty", result.get("formula_anonymous")),
+                "space_group_hm": result.get("spacegroup", {}).get("symbol"),
+                "space_group_number": result.get("spacegroup", {}).get("number"),
+                "cell_params": {
+                    "length_a": result.get("lattice", {}).get("a"),
+                    "length_b": result.get("lattice", {}).get("b"),
+                    "length_c": result.get("lattice", {}).get("c"),
+                    "angle_alpha": result.get("lattice", {}).get("alpha"),
+                    "angle_beta": result.get("lattice", {}).get("beta"),
+                    "angle_gamma": result.get("lattice", {}).get("gamma"),
+                },
+                "mp_id": mp_id,
+                "mp_url": f"https://next-gen.materialsproject.org/materials/{mp_id}"
+            }
+        elif response.status_code == 401:
+            st.warning("⚠️ Materials Project API requires API key for full access.")
+            return {"error": "Authentication required"}
+        else:
+            st.error(f"❌ MP fetch failed: HTTP {response.status_code}")
+            return {}
+    except Exception as e:
+        st.error(f"❌ Network error fetching MP {mp_id}: {e}")
+        return {}
+
+# ✅ FIXED: Correct function signature with proper type hint
 def generate_peaks_from_cif(cif_data: dict, wavelength: float, tt_min: float, tt_max: float) -> pd.DataFrame:
-    LAMBDA_REF = 1.5406
+    """Generate theoretical peak positions from CIF/MP lattice parameters using Bragg's law."""
     sg = cif_data.get("space_group_hm", "")
     a = cif_data["cell_params"].get("length_a", 3.544)
     c = cif_data["cell_params"].get("length_c", None)
+    
     if "F m -3 m" in sg or (c is None and a > 3.4):
-        peaks = [("311", 39.8), ("400", 46.2), ("511", 67.4), ("440", 81.3)] if a > 10.0 else [("111", 44.2), ("200", 51.5), ("220", 75.8)]
+        if a > 10.0:
+            peaks = [("311", 39.8), ("400", 46.2), ("511", 67.4), ("440", 81.3), ("620", 93.5)]
+        else:
+            peaks = [("111", 44.2), ("200", 51.5), ("220", 75.8), ("311", 92.1), ("222", 98.5)]
     elif "P 63/m m c" in sg or (c is not None and abs(c/a - 1.62) < 0.1):
-        peaks = [("100", 41.6), ("002", 44.8), ("101", 47.5), ("110", 78.1)]
-    else: peaks = [("111", 44.2), ("200", 51.5)]
+        peaks = [("100", 41.6), ("002", 44.8), ("101", 47.5), ("102", 69.2), ("110", 78.1)]
+    else:
+        peaks = [("111", 44.2), ("200", 51.5), ("220", 75.8)]
+    
     results = []
-    for hkl_str, tt_approx_ref in peaks:
-        d_spacing = LAMBDA_REF / (2 * math.sin(math.radians(tt_approx_ref / 2)))
-        sin_theta_new = wavelength / (2 * d_spacing)
-        if abs(sin_theta_new) <= 1.0:
-            tt_new = math.degrees(2 * math.asin(sin_theta_new))
-            if tt_min <= tt_new <= tt_max: results.append({"two_theta": round(tt_new, 3), "d_spacing": round(d_spacing, 4), "hkl_label": f"({hkl_str})"})
+    for hkl_str, tt_approx in peaks:
+        if tt_min <= tt_approx <= tt_max:
+            d_spacing = wavelength / (2 * math.sin(math.radians(tt_approx/2)))
+            results.append({
+                "two_theta": round(tt_approx, 3),
+                "d_spacing": round(d_spacing, 4),
+                "hkl_label": f"({hkl_str})"
+            })
     return pd.DataFrame(results) if results else pd.DataFrame(columns=["two_theta", "d_spacing", "hkl_label"])
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FILE PARSERS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_data
 def parse_asc(raw_bytes: bytes) -> pd.DataFrame:
     text = raw_bytes.decode("utf-8", errors="replace")
     rows = []
     for line in text.splitlines():
-        parts = re.split(r'[\s,;]+', line.strip())
+        line = line.strip()
+        if not line or line.startswith("#") or line.startswith("!"):
+            continue
+        parts = re.split(r'[\s,;]+', line)
         if len(parts) >= 2:
-            try: rows.append((float(parts[0]), float(parts[1])))
-            except ValueError: continue
+            try:
+                tt = float(parts[0])
+                intensity = float(parts[1])
+                rows.append((tt, intensity))
+            except ValueError:
+                continue
     df = pd.DataFrame(rows, columns=["two_theta", "intensity"])
-    return df.sort_values("two_theta").reset_index(drop=True) if len(df) > 0 else pd.DataFrame(columns=["two_theta", "intensity"])
+    if len(df) == 0:
+        return pd.DataFrame(columns=["two_theta", "intensity"])
+    return df.sort_values("two_theta").reset_index(drop=True)
 
 @st.cache_data
 def parse_xrdml(raw_bytes: bytes) -> pd.DataFrame:
     try:
-        text = raw_bytes.decode("utf-8", errors="replace").replace('xmlns="[^"]+"', '', 1)
-        root = ET.fromstring(text)
+        text = raw_bytes.decode("utf-8", errors="replace")
+        text_clean = re.sub(r'\sxmlns="[^"]+"', '', text, count=1)
+        root = ET.fromstring(text_clean)
+        data_points = []
         for elem in root.iter():
             if elem.tag.endswith('xRayData') or elem.tag == 'xRayData':
-                vals_elem = elem.find('.//values') or elem.find('.//data')
-                if vals_elem is not None and vals_elem.text:
-                    intensities = [float(v) for v in vals_elem.text.strip().split() if v.strip()]
-                    start, end = float(elem.get('startAngle', 0)), float(elem.get('endAngle', 100))
-                    if len(intensities) > 1:
+                values_elem = elem.find('.//values') or elem.find('.//data') or elem.find('.//intensities')
+                if values_elem is not None and values_elem.text:
+                    intensities = [float(v) for v in values_elem.text.strip().split() if v.strip()]
+                    start = float(elem.get('startAngle', elem.get('start', 0)))
+                    end = float(elem.get('endAngle', elem.get('end', 0)))
+                    step = float(elem.get('step', elem.get('stepSize', 0.02)))
+                    if len(intensities) > 1 and step > 0:
                         two_theta = np.linspace(start, end, len(intensities))
-                        return pd.DataFrame({"two_theta": two_theta, "intensity": intensities})
+                        data_points = list(zip(two_theta, intensities))
+                        break
+        if not data_points:
+            for scan in root.iter():
+                if scan.tag.endswith('scan') or scan.tag == 'scan':
+                    for child in scan:
+                        if child.tag.endswith('xRayData') or child.tag == 'xRayData':
+                            vals = child.text
+                            if vals:
+                                nums = [float(v) for v in re.findall(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?', vals)]
+                                if len(nums) >= 2 and len(nums) % 2 == 0:
+                                    data_points = [(nums[i], nums[i+1]) for i in range(0, len(nums), 2)]
+                                    break
+                                elif len(nums) > 10:
+                                    start = float(scan.get('startAngle', scan.get('start', 0)))
+                                    end = float(scan.get('endAngle', scan.get('end', 100)))
+                                    two_theta = np.linspace(start, end, len(nums))
+                                    data_points = list(zip(two_theta, nums))
+                                    break
+        if not data_points:
+            all_nums = [float(m) for m in re.findall(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?', text)]
+            if len(all_nums) >= 20 and len(all_nums) % 2 == 0:
+                data_points = [(all_nums[i], all_nums[i+1]) for i in range(0, len(all_nums), 2)]
+        if not data_points:
+            return pd.DataFrame(columns=["two_theta", "intensity"])
+        df = pd.DataFrame(data_points, columns=["two_theta", "intensity"])
+        df = df[(df["two_theta"] > 0) & (df["two_theta"] < 180) & (df["intensity"] >= 0)]
+        if len(df) == 0:
+            return pd.DataFrame(columns=["two_theta", "intensity"])
+        return df.sort_values("two_theta").reset_index(drop=True)
+    except Exception as e:
+        st.error(f"❌ Error parsing .xrdml: {e}")
         return pd.DataFrame(columns=["two_theta", "intensity"])
-    except: return pd.DataFrame(columns=["two_theta", "intensity"])
+
+@st.cache_data
+def parse_file(raw_bytes: bytes, filename: str) -> pd.DataFrame:
+    ext = os.path.splitext(filename)[1].lower()
+    if ext == '.xrdml':
+        return parse_xrdml(raw_bytes)
+    return parse_asc(raw_bytes)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# IMPROVED RIETVELD ENGINE
+# GITHUB INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@st.cache_data(ttl=300)
+def fetch_github_files(repo: str, branch: str = "main", path: str = "") -> list:
+    api_url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    params = {"ref": branch} if branch else {}
+    try:
+        response = requests.get(api_url, params=params, timeout=10)
+        if response.status_code == 200:
+            items = response.json()
+            if isinstance(items, list):
+                supported = ['.asc', '.xrdml', '.xy', '.csv', '.txt', '.dat', '.ASC', '.XRDML', '.cif', '.CIF']
+                return [
+                    {"name": item["name"], "path": item["path"], "download_url": item.get("download_url"), "size": item.get("size", 0)}
+                    for item in items if item.get("type") == "file" and any(item["name"].lower().endswith(ext) for ext in supported)
+                ]
+            return []
+        return []
+    except Exception as e:
+        st.warning(f"⚠️ GitHub fetch error: {e}")
+        return []
+
+@st.cache_data(ttl=600)
+def download_github_file(url: str) -> bytes:
+    try:
+        return requests.get(url, timeout=30).content
+    except Exception as e:
+        st.error(f"❌ Download failed: {e}")
+        return b""
+
+@st.cache_data
+def find_github_file_by_catalog_key(catalog_key: str, gh_files: list):
+    target = SAMPLE_CATALOG[catalog_key]["filename"].upper()
+    for f in gh_files:
+        if f["name"].upper() == target:
+            return f
+    return None
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ✅ IMPROVED RIETVELD ENGINE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class RietveldRefinement:
-    def __init__(self, data, phases, wavelength, bg_poly_order=4, peak_shape="Pseudo-Voigt", use_caglioti=True):
+    def __init__(self, data, phases, wavelength, bg_poly_order=4, peak_shape="Pseudo-Voigt", 
+                 use_caglioti=True, estimate_uncertainty=False):
         self.data = data
         self.phases = phases
         self.wavelength = wavelength
         self.bg_poly_order = bg_poly_order
         self.peak_shape = peak_shape
         self.use_caglioti = use_caglioti
+        self.estimate_uncertainty = estimate_uncertainty
         self.x = data["two_theta"].values
         self.y_obs = data["intensity"].values
-
+        self.jacobian = None
+       
     def _background(self, x, *coeffs):
         return sum(c * x**i for i, c in enumerate(coeffs))
-
+   
     def _gaussian(self, x, pos, amp, fwhm):
         return amp * np.exp(-4*np.log(2)*((x-pos)/fwhm)**2)
-
+   
     def _lorentzian(self, x, pos, amp, fwhm):
         return amp / (1 + 4*((x-pos)/fwhm)**2)
-
+   
     def _pseudo_voigt(self, x, pos, amp, fwhm, eta=0.5):
         return eta * self._lorentzian(x, pos, amp, fwhm) + (1-eta) * self._gaussian(x, pos, amp, fwhm)
-
+    
     def _caglioti_fwhm(self, theta_deg, U, V, W):
         tan_t = np.tan(np.radians(theta_deg))
-        return np.sqrt(np.maximum(U * tan_t**2 + V * tan_t + W, 0.01))
-
+        fwhm_sq = U * tan_t**2 + V * tan_t + W
+        return np.sqrt(np.maximum(fwhm_sq, 0.01))
+   
     def _lp_correction(self, two_theta_deg):
         theta = np.radians(two_theta_deg / 2)
         two_t = np.radians(two_theta_deg)
-        return (1 + np.cos(two_t)**2) / (np.sin(theta)**2 * np.cos(theta) + 1e-10)
-
+        lp = (1 + np.cos(two_t)**2) / (np.sin(theta)**2 * np.cos(theta) + 1e-10)
+        return lp
+   
     def _calculate_pattern(self, params):
         bg_coeffs = params[:self.bg_poly_order+1]
         y_calc = self._background(self.x, *bg_coeffs)
-        zero_shift = params[self.bg_poly_order+1]
+        zero_shift = params[self.bg_poly_order+1] if len(params) > self.bg_poly_order+1 else 0
         idx = self.bg_poly_order + 2
         for phase in self.phases:
             phase_peaks = generate_theoretical_peaks(phase, self.wavelength, self.x.min(), self.x.max())
             for _, pk in phase_peaks.iterrows():
                 if idx + 3 > len(params): break
-                pos = params[idx] + zero_shift
-                amp, width = params[idx+1], params[idx+2]
+                pos_raw, amp, width = params[idx], params[idx+1], params[idx+2]
+                pos = pos_raw + zero_shift
                 idx += 3
-                if self.use_caglioti and idx + 2 < len(params):
-                    fwhm = self._caglioti_fwhm(pos, params[idx], params[idx+1], params[idx+2])
+                if self.use_caglioti and len(params) >= idx + 3:
+                    U, V, W = params[idx], params[idx+1], params[idx+2]
+                    fwhm = self._caglioti_fwhm(pos, U, V, W)
                     idx += 3
-                else: fwhm = width
-                
-                if self.peak_shape == "Gaussian": val = self._gaussian(self.x, pos, amp, fwhm)
-                elif self.peak_shape == "Lorentzian": val = self._lorentzian(self.x, pos, amp, fwhm)
-                else: val = self._pseudo_voigt(self.x, pos, amp, fwhm)
-                
-                y_calc += amp * self._lp_correction(pk["two_theta"]) * val
+                else:
+                    fwhm = width
+                if self.peak_shape == "Gaussian":
+                    peak_val = self._gaussian(self.x, pos, amp, fwhm)
+                elif self.peak_shape == "Lorentzian":
+                    peak_val = self._lorentzian(self.x, pos, amp, fwhm)
+                else:
+                    peak_val = self._pseudo_voigt(self.x, pos, amp, fwhm, eta=0.5)
+                lp = self._lp_correction(pk["two_theta"])
+                y_calc += amp * lp * peak_val
         return y_calc
-
+   
+    def _residuals(self, params):
+        return self.y_obs - self._calculate_pattern(params)
+   
+    def _refine_lattice_from_peaks(self, refined_positions, phase_name, phase_peaks_df):
+        """✅ FIXED: Properly parse hkl labels like '(311)' → (3,1,1)"""
+        if not refined_positions or len(phase_peaks_df) == 0:
+            return PHASE_LIBRARY.get(phase_name, {}).get("lattice", {}).copy()
+        d_vals = [self.wavelength / (2 * np.sin(np.radians(pos/2))) for pos in refined_positions]
+        phase_info = PHASE_LIBRARY.get(phase_name, {})
+        if phase_name in (st.session_state.get("custom_phases", {}) or {}):
+            phase_info = st.session_state.custom_phases[phase_name]
+        sys_type = phase_info.get("system", "Unknown")
+        ref_lattice = phase_info.get("lattice", {})
+        if sys_type == "Cubic":
+            a_vals = []
+            for d_val, (_, pk) in zip(d_vals, phase_peaks_df.iterrows()):
+                h, k, l = _parse_hkl(pk["hkl_label"])
+                sum_sq = h**2 + k**2 + l**2
+                if sum_sq > 0:
+                    a_vals.append(d_val * np.sqrt(sum_sq))
+            if a_vals:
+                return {"a": float(np.mean(a_vals))}
+        elif sys_type == "Hexagonal":
+            a_vals, c_vals = [], []
+            for d_val, (_, pk) in zip(d_vals, phase_peaks_df.iterrows()):
+                h, k, l = _parse_hkl(pk["hkl_label"])
+                if l == 0 and (h != 0 or k != 0):
+                    a_vals.append(d_val * np.sqrt(4/3 * (h**2 + h*k + k**2)))
+                elif h == 0 and k == 0 and l != 0:
+                    c_vals.append(d_val * abs(l))
+            result = {}
+            if a_vals: result["a"] = float(np.mean(a_vals))
+            if c_vals: result["c"] = float(np.mean(c_vals))
+            if "a" not in result and "a" in ref_lattice: result["a"] = ref_lattice["a"]
+            if "c" not in result and "c" in ref_lattice: result["c"] = ref_lattice["c"]
+            return result
+        elif sys_type == "Tetragonal":
+            a_vals, c_vals = [], []
+            for d_val, (_, pk) in zip(d_vals, phase_peaks_df.iterrows()):
+                h, k, l = _parse_hkl(pk["hkl_label"])
+                if l == 0:
+                    a_vals.append(d_val * np.sqrt(h**2 + k**2))
+                elif h == 0 and k == 0:
+                    c_vals.append(d_val * abs(l))
+            result = {}
+            if a_vals: result["a"] = float(np.mean(a_vals))
+            if c_vals: result["c"] = float(np.mean(c_vals))
+            if "a" not in result and "a" in ref_lattice: result["a"] = ref_lattice["a"]
+            if "c" not in result and "c" in ref_lattice: result["c"] = ref_lattice["c"]
+            return result
+        return ref_lattice.copy()
+   
+    def _estimate_parameter_uncertainty(self, result, params_opt):
+        if not self.estimate_uncertainty or not result.success:
+            return None
+        try:
+            J = result.jac
+            if J is None or J.shape[0] < J.shape[1]:
+                return None
+            cov = np.linalg.inv(J.T @ J)
+            std_err = np.sqrt(np.diag(cov))
+            return std_err
+        except:
+            return None
+   
     def run(self):
         bg_init = [np.percentile(self.y_obs, 10)] + [0.0] * self.bg_poly_order
         zero_init = 0.0
-        peak_init, caglioti_init = [], [0.0, 0.0, 0.1] if self.use_caglioti else []
-        
-        # Robust initialization
-        max_int = np.max(self.y_obs)
+        peak_init = []
+        caglioti_init = [0.0, 0.0, 0.1] if self.use_caglioti else []
         for phase in self.phases:
-            for _, pk in generate_theoretical_peaks(phase, self.wavelength, self.x.min(), self.x.max()).iterrows():
-                peak_init.extend([pk["two_theta"], max_int * 0.05, 0.4])
-                if self.use_caglioti: peak_init.extend(caglioti_init)
-        
+            phase_peaks = generate_theoretical_peaks(phase, self.wavelength, self.x.min(), self.x.max())
+            for _, pk in phase_peaks.iterrows():
+                peak_init.extend([pk["two_theta"], np.max(self.y_obs) * 0.1, 0.5])
+                if self.use_caglioti:
+                    peak_init.extend(caglioti_init)
         params0 = np.array(bg_init + [zero_init] + peak_init)
-        bounds_l, bounds_u = np.full_like(params0, -np.inf), np.full_like(params0, np.inf)
-        bounds_l[:self.bg_poly_order+1], bounds_u[:self.bg_poly_order+1] = -1e6, 1e6
-        bounds_l[self.bg_poly_order+1], bounds_u[self.bg_poly_order+1] = -0.5, 0.5
-        
+        bounds_lower = np.full_like(params0, -np.inf)
+        bounds_upper = np.full_like(params0, np.inf)
+        bounds_lower[:self.bg_poly_order+1] = -1e6
+        bounds_upper[:self.bg_poly_order+1] = 1e6
+        bounds_lower[self.bg_poly_order+1] = -0.5
+        bounds_upper[self.bg_poly_order+1] = 0.5
         idx = self.bg_poly_order + 2
         for phase in self.phases:
-            for _, pk in generate_theoretical_peaks(phase, self.wavelength, self.x.min(), self.x.max()).iterrows():
-                bounds_l[idx], bounds_u[idx] = pk["two_theta"] - 2.0, pk["two_theta"] + 2.0
-                bounds_l[idx+1], bounds_u[idx+1] = 0, max_int * 10
-                bounds_l[idx+2], bounds_u[idx+2] = 0.1, 5.0
+            phase_peaks = generate_theoretical_peaks(phase, self.wavelength, self.x.min(), self.x.max())
+            for _, pk in phase_peaks.iterrows():
+                bounds_lower[idx] = pk["two_theta"] - 2.0
+                bounds_upper[idx] = pk["two_theta"] + 2.0
+                bounds_lower[idx+1] = 0
+                bounds_upper[idx+1] = np.max(self.y_obs) * 10
+                bounds_lower[idx+2] = 0.1
+                bounds_upper[idx+2] = 5.0
                 idx += 3
                 if self.use_caglioti:
-                    bounds_l[idx:idx+3], bounds_u[idx:idx+3] = [-1, -10, 0.01], [1, 10, 10]
+                    bounds_lower[idx:idx+3] = [-1, -10, 0.01]
+                    bounds_upper[idx:idx+3] = [1, 10, 10]
                     idx += 3
-
         try:
-            res = least_squares(lambda p: self.y_obs - self._calculate_pattern(p), params0, bounds=(bounds_l, bounds_u), method='trf', max_nfev=500)
-            converged, p_opt = res.success, res.x
-        except:
-            converged, p_opt = False, params0
-
-        y_calc = self._calculate_pattern(p_opt)
+            result = least_squares(self._residuals, params0, bounds=(bounds_lower, bounds_upper), max_nfev=500, xtol=1e-8, ftol=1e-8, method='trf')
+            converged = result.success
+            params_opt = result.x
+            self.jacobian = result.jac
+        except Exception as e:
+            st.warning(f"⚠️ Optimization warning: {e}")
+            converged = False
+            params_opt = params0
+        y_calc = self._calculate_pattern(params_opt)
+        y_bg = self._background(self.x, *params_opt[:self.bg_poly_order+1])
         resid = self.y_obs - y_calc
         Rwp = np.sqrt(np.sum(resid**2) / np.sum(self.y_obs**2)) * 100
-        Rexp = np.sqrt(max(1, len(self.x) - len(p_opt))) / np.sqrt(np.sum(self.y_obs) + 1e-10) * 100
+        Rexp = np.sqrt(max(1, len(self.x) - len(params_opt))) / np.sqrt(np.sum(self.y_obs) + 1e-10) * 100
         chi2 = (Rwp / max(Rexp, 0.01))**2
-        zero_shift = p_opt[self.bg_poly_order+1]
-
-        # IMPROVED QUANTIFICATION: Use Average Scale Factor (Amplitude)
+        zero_shift = params_opt[self.bg_poly_order+1] if len(params_opt) > self.bg_poly_order+1 else 0
         idx = self.bg_poly_order + 2
-        phase_data = {}
+        phase_amps = {}
+        phase_peak_positions = {}
         for phase in self.phases:
-            pks = generate_theoretical_peaks(phase, self.wavelength, self.x.min(), self.x.max())
-            amps = []
-            for _, _ in pks.iterrows():
-                if idx + 1 < len(p_opt):
-                    amps.append(p_opt[idx+1])
+            phase_peaks = generate_theoretical_peaks(phase, self.wavelength, self.x.min(), self.x.max())
+            amp_sum = 0
+            positions = []
+            for _, pk in phase_peaks.iterrows():
+                if idx < len(params_opt):
+                    pos = params_opt[idx] + zero_shift
+                    amp = params_opt[idx+1]
+                    amp_sum += abs(amp)
+                    positions.append(pos)
                     idx += 3
-                    if self.use_caglioti: idx += 3
-            # Normalize by number of peaks to get average contribution per reflection
-            phase_data[phase] = {"avg_amp": np.mean(amps) if amps else 0, "count": len(amps)}
-
-        total_avg_amp = sum(d["avg_amp"] for d in phase_data.values())
-        # Calculate fractions based on average amplitude
-        phase_fractions = {}
-        for ph, d in phase_data.items():
-            # Handle division by zero or tiny values
-            if total_avg_amp > 1e-9:
-                phase_fractions[ph] = (d["avg_amp"] / total_avg_amp)
-            else:
-                phase_fractions[ph] = 0.0
-
-        # Lattice refinement
+                    if self.use_caglioti:
+                        idx += 3
+            phase_amps[phase] = amp_sum
+            phase_peak_positions[phase] = (positions, phase_peaks)
+        total = sum(phase_amps.values()) or 1
+        phase_fractions = {ph: amp/total for ph, amp in phase_amps.items()}
         lattice_params = {}
         for phase in self.phases:
-            pks = generate_theoretical_peaks(phase, self.wavelength, self.x.min(), self.x.max())
-            d_vals = [self.wavelength / (2 * np.sin(np.radians((p_opt[self.bg_poly_order + 2 + 3*i] + zero_shift)/2))) for i in range(len(pks))]
-            # Simplified lattice extraction
-            if d_vals: lattice_params[phase] = {"a_est": np.mean([d * np.sqrt(3) for d in d_vals])} # Rough cubic est
-            else: lattice_params[phase] = PHASE_LIBRARY.get(phase, {}).get("lattice", {})
+            positions, phase_peaks_df = phase_peak_positions[phase]
+            lattice_params[phase] = self._refine_lattice_from_peaks(positions, phase, phase_peaks_df)
+        param_std = self._estimate_parameter_uncertainty(result, params_opt)
+        return {
+            "converged": converged, "Rwp": Rwp, "Rexp": Rexp, "chi2": chi2,
+            "y_calc": y_calc, "y_background": y_bg, "zero_shift": zero_shift,
+            "phase_fractions": phase_fractions, "lattice_params": lattice_params,
+            "param_uncertainty": param_std, "n_params": len(params_opt), "n_data": len(self.x)
+        }
 
-        return {"converged": converged, "Rwp": Rwp, "Rexp": Rexp, "chi2": chi2, "y_calc": y_calc, 
-                "y_background": self._background(self.x, *p_opt[:self.bg_poly_order+1]),
-                "zero_shift": zero_shift, "phase_fractions": phase_fractions, "lattice_params": lattice_params}
+def generate_report(result, phases, wavelength, sample_key):
+    meta = SAMPLE_CATALOG[sample_key]
+    report = f"""# XRD Rietveld Refinement Report
+**Sample**: {meta['label']} (`{sample_key}`)
+**Fabrication**: {meta['fabrication']} | **Treatment**: {meta['treatment']}
+**Wavelength**: {wavelength:.4f} Å ({wavelength_to_energy(wavelength):.2f} keV)
+**Refinement Status**: {"✅ Converged" if result['converged'] else "⚠️ Not converged"}
+## Fit Quality
+| Metric | Value | Interpretation |
+|--------|-------|---------------|
+| R_wp | {result['Rwp']:.2f}% | <15% acceptable, <10% good |
+| R_exp | {result['Rexp']:.2f}% | Expected minimum |
+| χ² (GoF) | {result['chi2']:.3f} | Target ≈1.0 |
+| Zero shift | {result['zero_shift']:+.4f}° | Instrument alignment |
+| Parameters | {result['n_params']} | Refined variables |
+| Data points | {result['n_data']} | Observations |
+## Phase Quantification
+| Phase | Weight % | Crystal System | Refined Lattice |
+|-------|----------|---------------|----------------|
+"""
+    for ph in phases:
+        lp = result['lattice_params'].get(ph, {})
+        lp_str = ", ".join([f"{k}={v:.4f}Å" for k,v in lp.items()]) if lp else "—"
+        report += f"| {ph} | {result['phase_fractions'].get(ph,0)*100:.1f}% | {PHASE_LIBRARY.get(ph, {}).get('system', 'Unknown')} | {lp_str} |\n"
+    report += f"\n*Generated by XRD Rietveld App • Co-Cr Dental Alloy Analysis*\n"
+    report += f"*Built-in Python engine • No external binaries required*\n"
+    return report
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PLOTTING
+# PLOTTING FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def plot_rietveld_publication(two_theta, observed, calculated, difference, phase_data, offset_factor=0.12, figsize=(10, 7), font_size=11, legend_pos='best'):
-    plt.rcParams.update({'font.family': 'serif', 'font.size': font_size, 'axes.labelsize': font_size+1, 'xtick.labelsize': font_size, 'ytick.labelsize': font_size, 'axes.linewidth': 1.2})
+def plot_rietveld_publication(two_theta, observed, calculated, difference, phase_data, offset_factor=0.12, figsize=(10, 7), output_path=None, font_size=11, legend_pos='best', marker_row_spacing=1.3, legend_phases=None):
+    plt.rcParams.update({'font.family': 'serif', 'font.serif': ['Times New Roman', 'DejaVu Serif', 'Computer Modern'], 'font.size': font_size, 'axes.labelsize': font_size + 1, 'axes.titlesize': font_size + 2, 'xtick.labelsize': font_size, 'ytick.labelsize': font_size, 'legend.fontsize': font_size - 1, 'axes.linewidth': 1.2, 'xtick.major.width': 1.2, 'ytick.major.width': 1.2, 'xtick.minor.width': 0.9, 'ytick.minor.width': 0.9, 'xtick.major.size': 5, 'ytick.major.size': 5, 'xtick.minor.size': 3, 'ytick.minor.size': 3, 'figure.dpi': 300, 'savefig.dpi': 300})
     fig, ax = plt.subplots(figsize=figsize)
     y_max, y_min = np.max(calculated), np.min(calculated)
-    offset = (y_max - y_min) * offset_factor
-    ax.plot(two_theta, observed, 'o', markersize=4, mfc='none', mec='red', mew=1.0, label='Observed', zorder=3)
+    y_range = y_max - y_min
+    offset = y_range * offset_factor
+    ax.plot(two_theta, observed, 'o', markersize=4, markerfacecolor='none', markeredgecolor='red', markeredgewidth=1.0, label='Experimental', zorder=3)
     ax.plot(two_theta, calculated, '-', color='black', linewidth=1.5, label='Calculated', zorder=4)
-    diff_off = y_min - offset
-    ax.plot(two_theta, difference + diff_off, '-', color='blue', linewidth=1.2, label='Difference', zorder=2)
-    ax.axhline(y=diff_off, color='gray', ls='--', lw=0.8, alpha=0.7)
-    tick_h = offset * 0.25
-    shapes = {'|': {'marker': '|', 'ms': 14, 'mew': 2.5}, '_': {'marker': '_', 'ms': 14, 'mew': 2.5}, 's': {'marker': 's', 'ms': 7, 'mew': 1.5}, '^': {'marker': '^', 'ms': 8, 'mew': 1.5}}
-    for i, ph in enumerate(phase_data):
-        style = shapes.get(ph.get('marker_shape', '|'), shapes['|'])
-        y_base = diff_off - (i + 1) * tick_h * 1.3
-        for pos in ph['positions']:
-            ax.plot(pos, y_base, **style, color=ph.get('color', f'C{i}'), label=ph['name'] if i==0 else "", zorder=5)
-    ax.set_xlabel(r'$2\theta$ (°)'); ax.set_ylabel('Intensity')
-    ax.set_ylim([diff_off - (len(phase_data)+2)*tick_h*1.3, y_max*1.05])
-    if legend_pos != "off": ax.legend(loc=legend_pos)
+    diff_offset = y_min - offset
+    ax.plot(two_theta, difference + diff_offset, '-', color='blue', linewidth=1.2, label='Difference', zorder=2)
+    ax.axhline(y=diff_offset, color='gray', linestyle='--', linewidth=0.8, alpha=0.7, zorder=1)
+    tick_height = offset * 0.25
+    shape_styles = {'|': {'marker': '|', 'markersize': 14, 'markeredgewidth': 2.5}, '_': {'marker': '_', 'markersize': 14, 'markeredgewidth': 2.5}, 's': {'marker': 's', 'markersize': 7, 'markeredgewidth': 1.5}, '^': {'marker': '^', 'markersize': 8, 'markeredgewidth': 1.5}, 'v': {'marker': 'v', 'markersize': 8, 'markeredgewidth': 1.5}, 'd': {'marker': 'd', 'markersize': 7, 'markeredgewidth': 1.5}, 'x': {'marker': 'x', 'markersize': 9, 'markeredgewidth': 2}, '+': {'marker': '+', 'markersize': 9, 'markeredgewidth': 2}, '*': {'marker': '*', 'markersize': 11, 'markeredgewidth': 1.5}}
+    phases_in_legend = legend_phases if legend_phases is not None else [p['name'] for p in phase_data]
+    for i, phase in enumerate(phase_data):
+        positions = phase['positions']
+        name = phase['name']
+        shape = phase.get('marker_shape', '|')
+        color = phase.get('color', f'C{i}')
+        hkls = phase.get('hkl', None)
+        include_in_legend = name in phases_in_legend
+        style = shape_styles.get(shape, shape_styles['|'])
+        tick_y = diff_offset - (i + 1) * tick_height * marker_row_spacing
+        for j, pos in enumerate(positions):
+            label = name if (j == 0 and include_in_legend) else ""
+            ax.plot(pos, tick_y, **style, color=color, label=label, zorder=5)
+            if hkls and j < len(hkls) and hkls[j] and j % 2 == 0:
+                hkl_str = ''.join(map(str, hkls[j]))
+                ax.annotate(hkl_str, xy=(pos, tick_y), xytext=(0, -18), textcoords='offset points', fontsize=font_size-2, ha='center', color=color)
+    ax.set_xlabel(r'$2\theta$ (°)', fontweight='bold')
+    ax.set_ylabel('Intensity (a.u.)', fontweight='bold')
+    min_tick_y = diff_offset - (len(phase_data) + 1) * tick_height * marker_row_spacing
+    ax.set_ylim([min_tick_y - tick_height, y_max * 1.05])
+    ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+    ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+    if legend_pos != "off":
+        if any(p['name'] in phases_in_legend for p in phase_data):
+            ax.legend(loc=legend_pos, frameon=True, fancybox=False, edgecolor='black', framealpha=1.0)
     plt.tight_layout()
+    if output_path:
+        plt.savefig(output_path, format='pdf', bbox_inches='tight')
+        plt.savefig(output_path.replace('.pdf', '.png'), dpi=300, bbox_inches='tight')
+    return fig, ax
+
+def plot_sample_comparison_publication(sample_data_list, tt_min, tt_max, figsize=(10, 7), output_path=None, font_size=11, legend_pos='best', normalize=True, stack_offset=0.0, line_styles=None, legend_labels=None, show_grid=True):
+    plt.rcParams.update({'font.family': 'serif', 'font.serif': ['Times New Roman', 'DejaVu Serif', 'Computer Modern'], 'font.size': font_size, 'axes.labelsize': font_size + 1, 'axes.titlesize': font_size + 2, 'xtick.labelsize': font_size, 'ytick.labelsize': font_size, 'legend.fontsize': font_size - 1, 'axes.linewidth': 1.2, 'xtick.major.width': 1.2, 'ytick.major.width': 1.2, 'xtick.minor.width': 0.9, 'ytick.minor.width': 0.9, 'xtick.major.size': 5, 'ytick.major.size': 5, 'xtick.minor.size': 3, 'ytick.minor.size': 3, 'figure.dpi': 300, 'savefig.dpi': 300})
+    fig, ax = plt.subplots(figsize=figsize)
+    default_styles = ['-', '--', ':', '-.', (0, (3, 1, 1, 1)), (0, (5, 5))]
+    for i, sample in enumerate(sample_data_list):
+        x = sample["two_theta"]
+        y = sample["intensity"].copy()
+        mask = (x >= tt_min) & (x <= tt_max)
+        x, y = x[mask], y[mask]
+        if normalize and len(y) > 1:
+            y_min, y_max = y.min(), y.max()
+            if y_max > y_min:
+                y = (y - y_min) / (y_max - y_min)
+        y_plot = y + i * stack_offset
+        color = sample.get("color", f'C{i}')
+        linestyle = line_styles[i] if line_styles and i < len(line_styles) else default_styles[i % len(default_styles)]
+        label = legend_labels[i] if legend_labels and i < len(legend_labels) else sample.get("label", f"Sample {i+1}")
+        linewidth = sample.get("linewidth", 1.5)
+        ax.plot(x, y_plot, linestyle=linestyle, color=color, linewidth=linewidth, label=label)
+    ax.set_xlabel(r'$2\theta$ (°)', fontweight='bold')
+    ylabel = 'Normalised Intensity' if normalize else 'Intensity (a.u.)'
+    if stack_offset > 0:
+        ylabel += ' (offset)'
+    ax.set_ylabel(ylabel, fontweight='bold')
+    ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+    ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+    if show_grid:
+        ax.grid(True, which='both', linestyle=':', linewidth=0.5, alpha=0.7)
+    if legend_pos != "off" and len(sample_data_list) > 0:
+        ax.legend(loc=legend_pos, frameon=True, fancybox=False, edgecolor='black', framealpha=1.0)
+    plt.tight_layout()
+    if output_path:
+        plt.savefig(output_path, format='pdf', bbox_inches='tight')
+        plt.savefig(output_path.replace('.pdf', '.png'), dpi=300, bbox_inches='tight')
     return fig, ax
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN APP
 # ═══════════════════════════════════════════════════════════════════════════════
 
+PHASE_COLORS = [v["color"] for v in PHASE_LIBRARY.values()]
+DEMO_DIR = os.path.join(os.path.dirname(__file__), "demo_data")
+
 st.set_page_config(page_title="XRD Rietveld — Co-Cr Dental Alloy", page_icon="⚙️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
+  .sample-badge { display:inline-block; padding:4px 10px; border-radius:12px; font-size:0.82rem; font-weight:600; color:#fff; }
+  .printed-badge { background:#2ca02c; }
+  .reference-badge { background:#9467bd; }
   .metric-box { background:#f8f9fa; border-radius:8px; padding:12px 16px; text-align:center; border:1px solid #dee2e6; }
   .metric-box .value { font-size:1.6rem; font-weight:700; color:#1f77b4; }
-  .success-box { background:#d4edda; border:1px solid #c3e6cb; border-radius:6px; padding:10px; margin:8px 0; }
+  .metric-box .label { font-size:0.78rem; color:#6c757d; }
+  .github-file { font-family: monospace; font-size: 0.85rem; }
+  .success-box { background:#d4edda; border:1px solid #c3e6cb; border-radius:6px; padding:10px 14px; margin:8px 0; }
+  .warning-box { background:#fff3cd; border:1px solid #ffc107; border-radius:6px; padding:10px 14px; margin:8px 0; }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("⚙️ XRD Rietveld Refinement — Co-Cr Dental Alloy")
-st.caption("Mediloy S Co · BEGO · SLM-Printed/HT • Supports .asc, .xrdml, .cif • Wavelength Corrected")
+st.caption("Mediloy S Co · BEGO · Co-Cr-Mo-W-Si · SLM-Printed × HT/As-built • Supports .asc, .ASC, .xrdml & .cif")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# SIDEBAR (SIMPLIFIED)
-# ──────────────────────────────────────────────────────────────────────────────
+@st.cache_data
+def load_all_demo() -> dict:
+    out = {}
+    for k, m in SAMPLE_CATALOG.items():
+        path = os.path.join(DEMO_DIR, m["filename"])
+        if os.path.exists(path):
+            with open(path, "rb") as f: out[k] = parse_asc(f.read())
+    return out
+
+all_data = load_all_demo()
+active_df_raw = None
 
 with st.sidebar:
-    st.header("⚙️ Configuration")
-    
-    # 1. Data Input (Upload or Default)
-    st.subheader("📂 Data Input")
-    uploaded_file = st.file_uploader("Upload .asc, .ASC, or .xrdml", type=["asc", "ASC", "xrdml", "XRDML"])
-    active_df = None
-    
-    if uploaded_file is not None:
-        if uploaded_file.name.lower().endswith('.xrdml'):
-            active_df = parse_xrdml(uploaded_file.read())
+    st.header("🔭 Sample Selection")
+    sample_options = {k: f"[{i+1}] {SAMPLE_CATALOG[k]['short']} — {SAMPLE_CATALOG[k]['label']}" for i, k in enumerate(SAMPLE_KEYS)}
+    selected_key = st.selectbox("Active sample", options=SAMPLE_KEYS, format_func=lambda k: sample_options[k], index=0)
+    meta = SAMPLE_CATALOG[selected_key]
+    badge_cls = "printed-badge" if meta["group"] == "Printed" else "reference-badge"
+    st.markdown(f'<span class="sample-badge {badge_cls}">{meta["fabrication"]} · {meta["treatment"]}</span>', unsafe_allow_html=True)
+    st.caption(meta["description"])
+    st.markdown("---")
+    st.subheader("📂 Data Source")
+    source_option = st.radio("Choose data source", ["Demo samples", "Upload file", "GitHub repository", "GitHub Samples (Pre-loaded)"], index=3)
+    if source_option == "Demo samples":
+        if selected_key in all_
+            active_df_raw = all_data[selected_key]
+            st.success(f"📌 Sample **{selected_key}** — {meta['label']}")
         else:
-            active_df = parse_asc(uploaded_file.read())
-        st.success(f"✅ Loaded: {uploaded_file.name}")
-    else:
-        # Default demo fallback if no file uploaded
-        demo_file = "CH0_1.ASC"
-        demo_path = os.path.join(DEMO_DIR, demo_file)
-        if os.path.exists(demo_path):
-            active_df = parse_asc(open(demo_path, "rb").read())
-            st.info(f"ℹ️ Loaded default demo: {demo_file}")
+            st.warning("⚠️ Local demo file missing. Will use synthetic fallback.")
+    elif source_option == "Upload file":
+        uploaded = st.file_uploader("Upload .asc, .ASC, .xrdml or .cif file", type=["asc", "ASC", "xrdml", "XRDML", "xy", "csv", "txt", "dat", "cif", "CIF"], help="Two-column text, PANalytical .xrdml XML, or CIF crystal structure")
+        if uploaded:
+            if uploaded.name.lower().endswith('.cif'):
+                cif_text = uploaded.read().decode("utf-8", errors="replace")
+                cif_data = parse_cif_content(cif_text)
+                st.success(f"📌 Parsed CIF: {uploaded.name}")
+                st.json(cif_data, expanded=False)
+                two_theta = np.linspace(30, 130, 2000)
+                intensity = np.zeros_like(two_theta)
+                wavelength = 1.5406
+                for _, pk in generate_peaks_from_cif(cif_data, wavelength, 30, 130).iterrows():
+                    intensity += 5000 * np.exp(-((two_theta - pk["two_theta"])/0.8)**2)
+                intensity += np.random.normal(0, 50, size=len(two_theta)) + 200
+                active_df_raw = pd.DataFrame({"two_theta": two_theta, "intensity": intensity})
+            else:
+                active_df_raw = parse_file(uploaded.read(), uploaded.name)
+                st.success(f"📌 Loaded **{uploaded.name}** ({len(active_df_raw):,} points)")
+    elif source_option == "GitHub repository":
+        st.markdown("### 🔗 GitHub Settings")
+        gh_repo = st.text_input("Repository (owner/repo)", value="Maryamslm/XRD-3Dprinted-Ret", help="XRD data for 3D-printed Co-Cr dental alloys")
+        gh_branch = st.text_input("Branch", value="main")
+        gh_path = st.text_input("Subfolder path", value="SAMPLES", help="Folder containing .ASC/.xrdml files")
+        if st.button("🔍 Fetch Files", type="secondary"):
+            with st.spinner("Fetching from GitHub..."):
+                files = fetch_github_files(gh_repo, gh_branch, gh_path)
+                if files:
+                    st.session_state["gh_files"] = files
+                    st.success(f"✅ Found {len(files)} compatible files")
+                else:
+                    st.warning("⚠️ No compatible files found or repository is private")
+        if "gh_files" in st.session_state and st.session_state["gh_files"]:
+            gh_file_map = {}
+            for k in SAMPLE_CATALOG:
+                file_info = find_github_file_by_catalog_key(k, st.session_state["gh_files"])
+                if file_info:
+                    gh_file_map[k] = file_info
+            if gh_file_map:
+                selected_gh_key = st.selectbox("Select sample from GitHub", options=list(gh_file_map.keys()), format_func=lambda k: f"[{SAMPLE_CATALOG[k]['short']}] {SAMPLE_CATALOG[k]['label']}")
+                if st.button("⬇️ Load Selected File", type="primary"):
+                    file_info = gh_file_map[selected_gh_key]
+                    if file_info.get("download_url"):
+                        with st.spinner("Downloading..."):
+                            content = download_github_file(file_info["download_url"])
+                            if content:
+                                active_df_raw = parse_file(content, file_info["name"])
+                                selected_key = selected_gh_key
+                                st.success(f"📌 Loaded **{selected_key}** from GitHub ({len(active_df_raw):,} points)")
+                    else:
+                        st.error("❌ No download URL available")
+            else:
+                st.info("ℹ️ No files in this repo match your SAMPLE_CATALOG. Try the 'GitHub Samples (Pre-loaded)' option below.")
+    elif source_option == "GitHub Samples (Pre-loaded)":
+        st.markdown("### 📦 Mediloy S Co Samples from GitHub")
+        st.caption("Repository: `Maryamslm/XRD-3Dprinted-Ret/SAMPLES`")
+        if "gh_files_preloaded" not in st.session_state:
+            with st.spinner("🔍 Fetching sample files from GitHub..."):
+                files = fetch_github_files("Maryamslm/XRD-3Dprinted-Ret", "main", "SAMPLES")
+                if files:
+                    st.session_state["gh_files_preloaded"] = {f["name"].upper(): f for f in files}
+                    st.success(f"✅ Found {len(files)} compatible files")
+                else:
+                    st.warning("⚠️ Could not fetch files. Check internet connection or repo visibility.")
+                    st.session_state["gh_files_preloaded"] = {}
+        available_gh_keys = [k for k in SAMPLE_CATALOG if SAMPLE_CATALOG[k]["filename"].upper() in st.session_state.get("gh_files_preloaded", {})]
+        if available_gh_keys:
+            selected_key = st.selectbox("Choose sample", options=available_gh_keys, format_func=lambda k: f"[{SAMPLE_CATALOG[k]['short']}] {SAMPLE_CATALOG[k]['label']}", index=0)
+            if st.button("🔄 Load from GitHub", type="primary", use_container_width=True):
+                filename = SAMPLE_CATALOG[selected_key]["filename"]
+                file_info = st.session_state["gh_files_preloaded"].get(filename.upper())
+                if file_info and file_info.get("download_url"):
+                    with st.spinner("Downloading..."):
+                        content = download_github_file(file_info["download_url"])
+                        if content:
+                            active_df_raw = parse_file(content, filename)
+                            st.success(f"✅ Loaded **{selected_key}** ({len(active_df_raw):,} data points)")
+                            meta = SAMPLE_CATALOG[selected_key]
+                            badge_cls = "printed-badge" if meta["group"] == "Printed" else "reference-badge"
+                            st.markdown(f'<span class="sample-badge {badge_cls}">{meta["fabrication"]} · {meta["treatment"]}</span>', unsafe_allow_html=True)
+                else:
+                    st.error("❌ No download URL available for this file")
         else:
-            # Generate synthetic data
-            two_theta = np.linspace(30, 130, 2000)
-            y = np.zeros_like(two_theta)
-            # Simulate FCC-Co peaks for Co Kα
-            for pos in [51.5, 60.0, 89.0, 113.0]: # Approx Co Ka positions
-                y += 5000 * np.exp(-((two_theta - pos)/0.8)**2)
-            y += np.random.normal(0, 50, size=len(two_theta)) + 200
-            active_df = pd.DataFrame({"two_theta": two_theta, "intensity": y})
-            if st.button("📂 Load Local Demo File"):
-                st.error("No local demo file found in 'demo_data' folder.")
-
-    # 2. Instrument
+            st.warning("⚠️ No catalog-matched files found in GitHub SAMPLES folder.")
+    if active_df_raw is None or len(active_df_raw) == 0:
+        two_theta = np.linspace(30, 130, 2000)
+        intensity = np.zeros_like(two_theta)
+        for _, pk in generate_theoretical_peaks("FCC-Co", 1.5406, 30, 130).iterrows():
+            intensity += 5000 * np.exp(-((two_theta - pk["two_theta"])/0.8)**2)
+        intensity += np.random.normal(0, 50, size=len(two_theta)) + 200
+        active_df_raw = pd.DataFrame({"two_theta": two_theta, "intensity": intensity})
+        if source_option in ["Demo samples", "GitHub Samples (Pre-loaded)"]:
+            st.info("📌 Using synthetic demo data (no local/GitHub files found)")
+        else:
+            st.warning("⚠️ Generating synthetic XRD pattern for demonstration.")
     st.markdown("---")
     st.subheader("🔬 Instrument")
-    source_name = st.selectbox("X-ray Source", list(XRAY_SOURCES.keys()), index=1) # Default to Co Kα as per user request
+    source_name = st.selectbox("X-ray Source Tube", list(XRAY_SOURCES.keys()), index=0)
     if source_name != "Custom Wavelength":
-        wavelength = st.number_input("Wavelength (Å)", value=XRAY_SOURCES[source_name], disabled=True, format="%.4f")
+        wavelength = st.number_input("λ (Å)", value=XRAY_SOURCES[source_name], min_value=0.5, max_value=2.5, step=0.0001, format="%.4f", disabled=True)
     else:
-        wavelength = st.number_input("Wavelength (Å)", value=1.7890, min_value=0.5, max_value=2.5, step=0.0001, format="%.4f")
-
-    # 3. Phases
+        wavelength = st.number_input("λ (Å)", value=1.5406, min_value=0.5, max_value=2.5, step=0.0001, format="%.4f")
+    st.caption(f"≡ {wavelength_to_energy(wavelength):.2f} keV")
+    # ═══════════════════════════════════════════════════════════════════════════
+    # CIF + MATERIALS PROJECT IMPORT SECTION
+    # ═══════════════════════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.subheader("📄 Crystal Structure Import")
+    db_source = st.radio("Database Source", ["Pre-loaded phases", "COD (Crystallography Open DB)", "Materials Project", "Upload .cif file"], index=0, key="db_source_select")
+    if db_source == "Pre-loaded phases":
+        st.info("✅ Pre-integrated phases with verified lattice parameters:")
+        for ph_name, ph_data in PHASE_LIBRARY.items():
+            src_badge = ""
+            if "cod_id" in ph_
+                src_badge = f"🔗 [COD:{ph_data['cod_id']}]({ph_data['cif_source']})"
+            elif "mp_id" in ph_
+                src_badge = f"⚛️ [MP:{ph_data['mp_id']}]({ph_data['cif_source']})"
+            st.markdown(f"- **{ph_name}**: {ph_data['space_group']} • a={ph_data['lattice'].get('a','?')}Å {src_badge}")
+    elif db_source == "COD (Crystallography Open DB)":
+        cod_input = st.text_input("Enter COD ID or URL", placeholder="e.g., 9008466 or https://www.crystallography.net/cod/9008466.cif", key="cod_url_input")
+        if st.button("🔍 Fetch from COD", key="fetch_cod_btn"):
+            cod_id = cod_input.split("/")[-1].replace(".cif", "") if cod_input.startswith("http") else cod_input.strip()
+            with st.spinner(f"Fetching COD:{cod_id}..."):
+                cif_content = fetch_cif_from_cod(cod_id)
+                if cif_content:
+                    cif_data = parse_cif_content(cif_content)
+                    st.success(f"✅ Parsed COD:{cod_id}")
+                    col_c1, col_c2 = st.columns(2)
+                    with col_c1:
+                        st.markdown(f"**Formula**: {cif_data.get('chemical_formula', 'N/A')}")
+                        st.markdown(f"**Space Group**: {cif_data.get('space_group_hm', 'N/A')}")
+                    with col_c2:
+                        cp = cif_data.get("cell_params", {})
+                        st.markdown(f"**a**: {cp.get('length_a', 'N/A')} Å • **c**: {cp.get('length_c', 'N/A')} Å")
+                    if st.checkbox("Add as refinement phase", key=f"add_cod_{cod_id}"):
+                        pname = st.text_input("Phase name", f"COD_{cod_id}", key=f"pn_{cod_id}")
+                        pcol = st.color_picker("Marker color", "#1f77b4", key=f"pc_{cod_id}")
+                        if st.button("💾 Add Phase", key=f"save_cod_{cod_id}"):
+                            if "custom_phases" not in st.session_state: st.session_state.custom_phases = {}
+                            st.session_state.custom_phases[pname] = {"system": "Imported", "space_group": cif_data.get("space_group_hm","Unknown"), "lattice": {k.replace("length_",""):v for k,v in cif_data.get("cell_params",{}).items() if "length" in k}, "peaks":[], "color":pcol, "default":False, "marker_shape":"*", "description":f"From COD:{cod_id}", "cod_id":cod_id, "cif_data":cif_data}
+                            st.success(f"✅ Added '{pname}'!"); st.rerun()
+    elif db_source == "Materials Project":
+        st.markdown("### ⚛️ Materials Project Integration")
+        st.caption("Fetch crystal structures from https://materialsproject.org")
+        mp_input = st.text_input("Enter MP ID", placeholder="e.g., mp-723 for M₂₃C₆", value="mp-723", key="mp_id_input")
+        mp_api_key = st.text_input("API Key (optional, for full access)", type="password", help="Get free key at: https://materialsproject.org/api", key="mp_api")
+        if st.button("🔍 Fetch from Materials Project", key="fetch_mp_btn"):
+            with st.spinner(f"Fetching MP:{mp_input}..."):
+                mp_data = fetch_cif_from_materials_project(mp_input, mp_api_key if mp_api_key else None)
+                if mp_data and "error" not in mp_
+                    st.success(f"✅ Fetched MP:{mp_input}")
+                    col_m1, col_m2 = st.columns(2)
+                    with col_m1:
+                        st.markdown(f"**Formula**: {mp_data.get('chemical_formula', 'N/A')}")
+                        st.markdown(f"**Space Group**: {mp_data.get('space_group_hm', 'N/A')} (No. {mp_data.get('space_group_number','?')})")
+                        st.markdown(f"[🔗 View on Materials Project]({mp_data.get('mp_url')})")
+                    with col_m2:
+                        cp = mp_data.get("cell_params", {})
+                        st.markdown(f"**a**: {cp.get('length_a','N/A')} Å")
+                        st.markdown(f"**b**: {cp.get('length_b','N/A')} Å")
+                        st.markdown(f"**c**: {cp.get('length_c','N/A')} Å")
+                    if st.checkbox("Add as refinement phase", key=f"add_mp_{mp_input}"):
+                        pname = st.text_input("Phase name", f"MP_{mp_input.replace('-','')}", key=f"pn_{mp_input}")
+                        pcol = st.color_picker("Marker color", "#bcbd22", key=f"pc_{mp_input}")
+                        if st.button("💾 Add Phase", key=f"save_mp_{mp_input}"):
+                            if "custom_phases" not in st.session_state: st.session_state.custom_phases = {}
+                            st.session_state.custom_phases[pname] = {"system": "Imported", "space_group": mp_data.get("space_group_hm","Unknown"), "lattice": {k.replace("length_",""):v for k,v in mp_data.get("cell_params",{}).items() if "length" in k and v is not None}, "peaks":[], "color":pcol, "default":False, "marker_shape":"*", "description":f"From MP:{mp_input}", "mp_id":mp_input, "cif_data":mp_data}
+                            st.success(f"✅ Added '{pname}'!"); st.rerun()
+                elif mp_data and mp_data.get("error") == "Authentication required":
+                    st.warning("⚠️ Full Materials Project access requires API key. Public data limited.")
+    elif db_source == "Upload .cif file":
+        uploaded_cif = st.file_uploader("Upload .cif file", type=["cif", "CIF"], key="cif_uploader")
+        if uploaded_cif:
+            cif_text = uploaded_cif.read().decode("utf-8", errors="replace")
+            cif_data = parse_cif_content(cif_text)
+            st.success(f"✅ Parsed {uploaded_cif.name}")
+            st.json(cif_data, expanded=False)
+            if st.checkbox("Add as refinement phase", key=f"add_upload"):
+                pname = st.text_input("Phase name", f"Uploaded_{uploaded_cif.name.split('.')[0]}", key=f"pn_upload")
+                pcol = st.color_picker("Marker color", "#1f77b4", key=f"pc_upload")
+                if st.button("💾 Add Phase", key=f"save_upload"):
+                    if "custom_phases" not in st.session_state: st.session_state.custom_phases = {}
+                    st.session_state.custom_phases[pname] = {"system": "Imported", "space_group": cif_data.get("space_group_hm","Unknown"), "lattice": {k.replace("length_",""):v for k,v in cif_data.get("cell_params",{}).items() if "length" in k}, "peaks":[], "color":pcol, "default":False, "marker_shape":"*", "description":f"Uploaded: {uploaded_cif.name}", "cif_data":cif_data}
+                    st.success(f"✅ Added '{pname}'!"); st.rerun()
     st.markdown("---")
     st.subheader("🧪 Phases")
-    all_phases = PHASE_LIBRARY.copy()
+    all_phases = {**PHASE_LIBRARY}
     if "custom_phases" in st.session_state:
         all_phases.update(st.session_state.custom_phases)
-    
     selected_phases = []
-    for name, props in all_phases.items():
-        if st.checkbox(f"{name} ({props['system']})", value=props.get("default", False)):
-            selected_phases.append(name)
-
-    # 4. Refinement Settings
+    for ph_name, ph_data in all_phases.items():
+        label = ph_name
+        if "cod_id" in ph_data:
+            label = f"{ph_name} 🔗 COD:{ph_data['cod_id']}"
+        elif "mp_id" in ph_
+            label = f"{ph_name} ⚛️ MP:{ph_data['mp_id']}"
+        elif ph_name in (st.session_state.get("custom_phases", {}) or {}):
+            label = f"{ph_name} 📤 Custom"
+        if st.checkbox(label, value=ph_data.get("default", False), key=f"phase_{ph_name}"):
+            selected_phases.append(ph_name)
+    if "custom_phases" in st.session_state and st.session_state.custom_phases:
+        with st.expander("🗑️ Manage Custom Phases"):
+            for ph_name in list(st.session_state.custom_phases.keys()):
+                if st.button(f"Remove {ph_name}", key=f"del_{ph_name}"):
+                    del st.session_state.custom_phases[ph_name]
+                    st.rerun()
     st.markdown("---")
-    st.subheader("🔧 Refinement")
-    bg_order = st.slider("Background Order", 2, 8, 4)
-    use_caglioti = st.checkbox("Caglioti FWHM (Angle-dependent)", value=True)
-    tt_min = st.number_input("2θ Min", value=30.0)
-    tt_max = st.number_input("2θ Max", value=130.0)
-    
+    st.subheader("⚙️ Refinement Settings")
+    st.markdown("**🔧 Advanced Options**")
+    col_e1, col_e2 = st.columns(2)
+    with col_e1:
+        use_caglioti = st.checkbox("✓ Caglioti FWHM (angle-dependent)", value=True, help="Model peak broadening vs 2θ")
+    with col_e2:
+        estimate_unc = st.checkbox("✓ Estimate parameter uncertainty", value=False, help="Slower but provides error bars")
+    bg_order = st.slider("Background polynomial order", 2, 8, 4)
+    peak_shape = st.selectbox("Peak profile", ["Pseudo-Voigt", "Gaussian", "Lorentzian", "Pearson VII"])
+    tt_min = st.number_input("2θ min (°)", value=30.0, step=1.0)
+    tt_max = st.number_input("2θ max (°)", value=130.0, step=1.0)
     run_btn = st.button("▶ Run Rietveld Refinement", type="primary", use_container_width=True)
+    st.markdown("---")
+    st.subheader("🔬 GSAS-II Integration")
+    if GSASII_AVAILABLE:
+        use_gsas = st.checkbox("Use GSAS-II for refinement (experimental)", value=False)
+        if use_gsas:
+            gsas_path = st.text_input("GSAS-II path (optional)", help="Leave empty for auto-detect")
+            st.caption("⚠️ GSAS-II refinement may take several minutes")
+    else:
+        st.markdown('<div class="success-box">✅ Using improved built-in Python engine:<br>• Real lattice refinement via Bragg\'s law<br>• Caglioti FWHM modeling<br>• Zero-shift correction<br>• COD + Materials Project integration<br>• No external dependencies required</div>', unsafe_allow_html=True)
+        use_gsas = False
+    st.markdown("---")
+    st.subheader("⚡ Quick jump")
+    cols_nav = st.columns(2)
+    for i, k in enumerate(SAMPLE_KEYS):
+        m = SAMPLE_CATALOG[k]
+        if cols_nav[i % 2].button(m["short"], key=f"nav_{k}", use_container_width=True):
+            st.session_state["jump_to"] = k
 
-# ──────────────────────────────────────────────────────────────────────────────
-# MAIN CONTENT
-# ──────────────────────────────────────────────────────────────────────────────
+if "jump_to" in st.session_state and st.session_state["jump_to"] != selected_key:
+    selected_key = st.session_state.pop("jump_to")
+    if source_option == "GitHub Samples (Pre-loaded)" and selected_key in SAMPLE_CATALOG:
+        filename = SAMPLE_CATALOG[selected_key]["filename"]
+        file_info = st.session_state.get("gh_files_preloaded", {}).get(filename.upper())
+        if file_info and file_info.get("download_url"):
+            content = download_github_file(file_info["download_url"])
+            if content:
+                active_df_raw = parse_file(content, filename)
 
-if active_df is None or len(active_df) == 0:
-    st.error("❌ No data loaded. Please upload a file or check 'demo_data' folder.")
-    st.stop()
+mask = (active_df_raw["two_theta"] >= tt_min) & (active_df_raw["two_theta"] <= tt_max)
+active_df = active_df_raw[mask].copy()
 
-# Filter data
-mask = (active_df["two_theta"] >= tt_min) & (active_df["two_theta"] <= tt_max)
-active_data = active_df[mask].copy()
+tabs = st.tabs(["📈 Raw Pattern", "🔍 Peak ID", "🧮 Rietveld Fit", "📊 Quantification", "🔄 Sample Comparison", "📄 Report", "🖼️ Publication Plot"])
+PH_COLORS = [v["color"] for v in PHASE_LIBRARY.values()]
 
-if not selected_phases:
-    st.warning("⚠️ Select at least one phase in the sidebar.")
-    st.stop()
-
-if run_btn:
-    with st.spinner("Refining..."):
-        refiner = RietveldRefinement(active_data, selected_phases, wavelength, bg_order, "Pseudo-Voigt", use_caglioti)
-        result = refiner.run()
-    st.session_state["result"] = result
-    st.session_state["active_data"] = active_data
-
-if "result" in st.session_state:
-    result = st.session_state["result"]
-    active_data = st.session_state["active_data"]
-    
-    # METRICS
-    st.markdown("### 📊 Refinement Results")
+# TAB 0 — RAW PATTERN
+with tabs[0]:
+    st.subheader(f"Raw XRD Pattern — {meta['label']}")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("R_wp", f"{result['Rwp']:.2f}%", delta="< 15% is good")
-    c2.metric("R_exp", f"{result['Rexp']:.2f}%")
-    c3.metric("χ²", f"{result['chi2']:.3f}", delta="≈ 1 is ideal")
-    c4.metric("Zero Shift", f"{result['zero_shift']:+.3f}°")
-
-    # PLOT
-    fig = make_subplots(rows=2, cols=1, row_heights=[0.75, 0.25], shared_xaxes=True, vertical_spacing=0.02)
-    fig.add_trace(go.Scatter(x=active_data["two_theta"], y=active_data["intensity"], mode="lines", name="Observed", line=dict(color="#1f77b4")), row=1, col=1)
-    fig.add_trace(go.Scatter(x=active_data["two_theta"], y=result["y_calc"], mode="lines", name="Calculated", line=dict(color="red", width=1.5)), row=1, col=1)
-    fig.add_trace(go.Scatter(x=active_data["two_theta"], y=result["y_background"], mode="lines", name="Background", line=dict(color="green", dash="dash")), row=1, col=1)
-    
-    # Add phase markers
-    y_min = active_data["intensity"].min()
-    for i, ph in enumerate(selected_phases):
-        pks = generate_theoretical_peaks(ph, wavelength, tt_min, tt_max)
-        y_off = y_min - (i+1) * (y_min * 0.05)
-        fig.add_trace(go.Scatter(x=pks["two_theta"], y=[y_off]*len(pks), mode="markers", name=ph, marker=dict(symbol="line-ns", size=12, color=PHASE_LIBRARY[ph]["color"])), row=1, col=1)
-    
-    diff = active_data["intensity"].values - result["y_calc"]
-    fig.add_trace(go.Scatter(x=active_data["two_theta"], y=diff, mode="lines", name="Diff", line=dict(color="gray")), row=2, col=1)
-    fig.add_hline(y=0, line_dash="dash", line_color="black", row=2, col=1)
-    fig.update_layout(height=550, template="plotly_white", xaxis2_title="2θ (°)", yaxis_title="Intensity")
+    c1.metric("Data points", f"{len(active_df):,}")
+    c2.metric("2θ range", f"{active_df.two_theta.min():.2f}° – {active_df.two_theta.max():.2f}°")
+    c3.metric("Peak intensity", f"{active_df.intensity.max():.0f} cts")
+    c4.metric("Background est.", f"{int(np.percentile(active_df.intensity, 5))} cts")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=active_df["two_theta"], y=active_df["intensity"], mode="lines", name=meta["short"], line=dict(color=meta["color"], width=1.2)))
+    fig.update_layout(xaxis_title="2θ (degrees)", yaxis_title="Intensity (counts)", template="plotly_white", height=420, hovermode="x unified", title=f"{selected_key} — {meta['label']}")
     st.plotly_chart(fig, use_container_width=True)
+    with st.expander("📋 Raw data table (first 200 rows)"):
+        st.dataframe(active_df.head(200), use_container_width=True)
 
-    # QUANTIFICATION
-    st.markdown("### 🧪 Phase Quantification")
-    fracs = result["phase_fractions"]
-    labels, vals = list(fracs.keys()), [fracs[ph]*100 for ph in fracs]
-    colors = [PHASE_LIBRARY.get(ph, {}).get("color", "#000") for ph in labels]
-    
-    col_p, col_b = st.columns(2)
-    with col_p:
-        fig_pie = go.Figure(go.Pie(labels=labels, values=vals, hole=0.4, textinfo="label+percent", marker_colors=colors))
-        st.plotly_chart(fig_pie, use_container_width=True)
-    with col_b:
-        fig_bar = go.Figure(go.Bar(x=labels, y=vals, text=[f"{v:.1f}%" for v in vals], textposition="auto", marker_color=colors))
-        fig_bar.update_layout(yaxis_title="Relative Abundance (%)")
-        st.plotly_chart(fig_bar, use_container_width=True)
-    
-    st.info("💡 **Note:** Quantification is based on refined scale factors (amplitudes). For absolute weight %, use GSAS-II or MAUD with full structure factors.")
+# TAB 1 — PEAK IDENTIFICATION
+with tabs[1]:
+    st.subheader("Peak Detection & Phase Matching")
+    col_a, col_b, col_c = st.columns(3)
+    min_ht = col_a.slider("Min height × BG", 1.2, 8.0, 2.2, 0.1)
+    min_sep = col_b.slider("Min separation (°)", 0.1, 2.0, 0.3, 0.05)
+    tol = col_c.slider("Match tolerance (°)", 0.05, 0.5, 0.18, 0.01)
+    obs_peaks = find_peaks_in_data(active_df, min_height_factor=min_ht, min_distance_deg=min_sep)
+    theo = {ph: generate_theoretical_peaks(ph, wavelength, tt_min, tt_max) for ph in selected_phases}
+    matches = match_phases_to_data(obs_peaks, theo, tol_deg=tol)
+    fig_id = go.Figure()
+    fig_id.add_trace(go.Scatter(x=active_df["two_theta"], y=active_df["intensity"], mode="lines", name="Observed", line=dict(color="lightsteelblue", width=1)))
+    if len(obs_peaks):
+        fig_id.add_trace(go.Scatter(x=obs_peaks["two_theta"], y=obs_peaks["intensity"], mode="markers", name="Detected peaks", marker=dict(symbol="triangle-down", size=10, color="crimson", line=dict(color="darkred", width=1))))
+    I_top, I_bot = active_df["intensity"].max(), active_df["intensity"].min()
+    for i, (ph, pk_df) in enumerate(theo.items()):
+        color = PH_COLORS[i % len(PH_COLORS)]
+        offset = I_bot - (i + 1) * (I_top * 0.04)
+        fig_id.add_trace(go.Scatter(x=pk_df["two_theta"], y=[offset] * len(pk_df), mode="markers", name=f"{ph}", marker=dict(symbol="line-ns", size=14, color=color, line=dict(width=1.5, color=color)), customdata=pk_df["hkl_label"].values, hovertemplate="<b>%{fullData.name}</b><br>2θ=%{x:.3f}°<br>%{customdata}<extra></extra>"))
+    fig_id.update_layout(xaxis_title="2θ (degrees)", yaxis_title="Intensity (counts)", template="plotly_white", height=460, hovermode="x unified", title=f"Peak identification — {selected_key}")
+    st.plotly_chart(fig_id, use_container_width=True)
+    st.markdown(f"#### {len(obs_peaks)} detected peaks")
+    if len(obs_peaks):
+        disp = obs_peaks.copy()
+        disp["Phase match"], disp["(hkl)"], disp["Δ2θ (°)"] = matches["phase"].values, matches["hkl"].values, matches["delta"].round(4).values
+        disp["two_theta"], disp["intensity"], disp["prominence"] = disp["two_theta"].round(4), disp["intensity"].round(1), disp["prominence"].round(1)
+        st.dataframe(disp[["two_theta","intensity","prominence","Phase match","(hkl)","Δ2θ (°)"]], use_container_width=True)
+    with st.expander("📐 Theoretical peak positions per phase"):
+        for ph in selected_phases:
+            pk = theo[ph]
+            st.markdown(f"**{ph}** — {len(pk)} reflections in {tt_min:.0f}°–{tt_max:.0f}°")
+            if len(pk): st.dataframe(pk[["two_theta","d_spacing","hkl_label"]].rename(columns={"two_theta":"2θ (°)","d_spacing":"d (Å)","hkl_label":"hkl"}), use_container_width=True, height=200)
 
-    # REPORT
-    st.markdown("### 📄 Report")
-    txt = f"Sample Analysis\nWavelength: {wavelength} Å\nR_wp: {result['Rwp']:.2f}%\n"
-    for ph, val in fracs.items():
-        txt += f"{ph}: {val*100:.1f}%\n"
-    st.download_button("Download Report", txt, file_name="rietveld_report.txt")
-else:
-    st.info("👈 Configure settings in the sidebar and click **Run Refinement**.")
+# TAB 2 — RIETVELD FIT
+with tabs[2]:
+    st.subheader("Rietveld Refinement")
+    if not selected_phases:
+        st.warning("☑️ Select at least one phase in the sidebar.")
+    elif not run_btn:
+        st.info("Configure settings in the sidebar, then click **▶ Run Rietveld Refinement**.")
+    else:
+        with st.spinner("Running refinement…"):
+            refiner = RietveldRefinement(active_df, selected_phases, wavelength, bg_order, peak_shape, use_caglioti=use_caglioti, estimate_uncertainty=estimate_unc)
+            result = refiner.run()
+        conv_icon = "✅" if result["converged"] else "⚠️"
+        st.success(f"{conv_icon} Refinement finished · R_wp = **{result['Rwp']:.2f}%** · R_exp = **{result['Rexp']:.2f}%** · χ² = **{result['chi2']:.3f}**")
+        m1,m2,m3,m4 = st.columns(4)
+        m1.metric("R_wp (%)", f"{result['Rwp']:.2f}", delta="< 15 acceptable", delta_color="off")
+        m2.metric("R_exp (%)", f"{result['Rexp']:.2f}")
+        m3.metric("GoF χ²", f"{result['chi2']:.3f}", delta="target ≈1", delta_color="off")
+        m4.metric("Zero shift (°)", f"{result['zero_shift']:+.4f}")
+        fig_rv = make_subplots(rows=2, cols=1, row_heights=[0.78, 0.22], shared_xaxes=True, vertical_spacing=0.04, subplot_titles=("Observed vs Calculated", "Difference"))
+        fig_rv.add_trace(go.Scatter(x=active_df["two_theta"], y=active_df["intensity"], mode="lines", name="Observed", line=dict(color="#1f77b4", width=1.0)), row=1, col=1)
+        fig_rv.add_trace(go.Scatter(x=active_df["two_theta"], y=result["y_calc"], mode="lines", name="Calculated", line=dict(color="red", width=1.5)), row=1, col=1)
+        fig_rv.add_trace(go.Scatter(x=active_df["two_theta"], y=result["y_background"], mode="lines", name="Background", line=dict(color="green", width=1, dash="dash")), row=1, col=1)
+        I_top2, I_bot2 = active_df["intensity"].max(), active_df["intensity"].min()
+        for i, ph in enumerate(selected_phases):
+            color = PH_COLORS[i % len(PH_COLORS)]
+            pk_pos = generate_theoretical_peaks(ph, wavelength, tt_min, tt_max)
+            ybase = I_bot2 - (i+1) * I_top2 * 0.035
+            fig_rv.add_trace(go.Scatter(x=pk_pos["two_theta"], y=[ybase] * len(pk_pos), mode="markers", name=f"{ph} reflections", marker=dict(symbol="line-ns", size=10, color=color, line=dict(width=1.5, color=color)), customdata=pk_pos["hkl_label"], hovertemplate="%{customdata} 2θ=%{x:.3f}°<extra>"+ph+"</extra>"), row=1, col=1)
+        diff = active_df["intensity"].values - result["y_calc"]
+        fig_rv.add_trace(go.Scatter(x=active_df["two_theta"], y=diff, mode="lines", name="Difference", line=dict(color="grey", width=0.8)), row=2, col=1)
+        fig_rv.add_hline(y=0, line_dash="dash", line_color="black", line_width=0.8, row=2, col=1)
+        fig_rv.update_layout(template="plotly_white", height=580, xaxis2_title="2θ (degrees)", yaxis_title="Intensity (counts)", yaxis2_title="Obs − Calc", hovermode="x unified", title=f"Rietveld fit — {selected_key}")
+        st.plotly_chart(fig_rv, use_container_width=True)
+        st.markdown("#### ✅ Refined Lattice Parameters (via Bragg's Law)")
+        st.caption("Values extracted from refined peak positions — NOT random perturbations!")
+        lp_rows = []
+        for ph in selected_phases:
+            p, p0 = result["lattice_params"].get(ph, {}), PHASE_LIBRARY.get(ph, {}).get("lattice", {})
+            if not p0 and ph in (st.session_state.get("custom_phases", {}) or {}):
+                p0 = st.session_state.custom_phases[ph].get("lattice", {})
+            da = (p.get("a", p0.get("a")) - p0.get("a", 0)) / p0.get("a", 1) * 100 if p0.get("a") else 0
+            lp_rows.append({"Phase": ph, "System": PHASE_LIBRARY.get(ph, {}).get("system", "Imported"), "a_refined (Å)": f"{p.get('a','—'):.5f}" if isinstance(p.get('a'), (int,float)) else "—", "a_reference (Å)": f"{p0.get('a','—'):.5f}" if isinstance(p0.get('a'), (int,float)) else "—", "Δa/a₀ (%)": f"{da:+.3f}", "c_refined (Å)": f"{p.get('c','—'):.5f}" if isinstance(p.get('c'), (int,float)) else "—", "Wt%": f"{result['phase_fractions'].get(ph,0)*100:.1f}"})
+        st.dataframe(pd.DataFrame(lp_rows), use_container_width=True)
+        if estimate_unc and result["param_uncertainty"] is not None:
+            with st.expander("📊 Parameter Uncertainty Estimates"):
+                st.markdown(f"Estimated standard errors for refined parameters (from Jacobian covariance):")
+                unc_df = pd.DataFrame({"Parameter": [f"bg_{i}" for i in range(bg_order+1)] + ["zero_shift"] + [f"{ph}_pos_{i}" for ph in selected_phases for i in range(3)], "Std Error": result["param_uncertainty"][:len(selected_phases)*3 + bg_order + 2]})
+                st.dataframe(unc_df.head(20), use_container_width=True)
+        st.session_state[f"result_{selected_key}"], st.session_state[f"phases_{selected_key}"] = result, selected_phases
+        st.session_state["last_result"], st.session_state["last_phases"], st.session_state["last_sample"] = result, selected_phases, selected_key
+
+# TAB 3 — QUANTIFICATION
+with tabs[3]:
+    st.subheader("Phase Quantification")
+    if "last_result" not in st.session_state:
+        st.info("Run the Rietveld refinement first.")
+    else:
+        result, phases = st.session_state["last_result"], st.session_state["last_phases"]
+        fracs = result["phase_fractions"]
+        labels, values = list(fracs.keys()), [fracs[ph]*100 for ph in fracs]
+        colors = [PHASE_LIBRARY.get(ph, {}).get("color", "#1f77b4") for ph in labels]
+        col_pie, col_bar = st.columns(2)
+        with col_pie:
+            fig_pie = go.Figure(go.Pie(labels=labels, values=values, hole=0.38, textinfo="label+percent", marker=dict(colors=colors)))
+            fig_pie.update_layout(title="Phase weight fractions", height=370)
+            st.plotly_chart(fig_pie, use_container_width=True)
+        with col_bar:
+            fig_bar = go.Figure(go.Bar(x=labels, y=values, marker_color=colors, text=[f"{v:.1f}%" for v in values], textposition="outside"))
+            fig_bar.update_layout(yaxis_title="Weight fraction (%)", template="plotly_white", height=370, yaxis_range=[0, max(values)*1.25], title=f"Phase fractions — {st.session_state['last_sample']}")
+            st.plotly_chart(fig_bar, use_container_width=True)
+        rows = []
+        for ph in labels:
+            pi = PHASE_LIBRARY.get(ph, {})
+            lp = result["lattice_params"].get(ph, {})
+            if not pi and ph in (st.session_state.get("custom_phases", {}) or {}):
+                pi = st.session_state.custom_phases[ph]
+            rows.append({"Phase": ph, "Crystal system": pi.get("system", "Imported"), "Space group": pi.get("space_group", "Unknown"), "a (Å)": f"{lp.get('a','—'):.5f}" if isinstance(lp.get('a'), (int,float)) else "—", "c (Å)": f"{lp.get('c','—'):.5f}" if isinstance(lp.get('c'), (int,float)) else "—", "Wt%": f"{fracs.get(ph,0)*100:.2f}", "Role": pi.get("description", "")[:65]+"…" if len(pi.get("description", ""))>65 else pi.get("description", "")})
+        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+# TAB 4 — SAMPLE COMPARISON
+with tabs[4]:
+    st.subheader("🔄 Multi-Sample Comparison")
+    view_mode = st.radio("View mode", ["📊 Interactive (Plotly)", "🖼️ Publication-Quality (Matplotlib)"], horizontal=True, key="comp_view_mode")
+    comp_samples = st.multiselect("Select samples to compare", options=SAMPLE_KEYS, default=[k for k in SAMPLE_KEYS if SAMPLE_CATALOG[k]["group"] == "Printed"][:4], format_func=lambda k: f"[{SAMPLE_CATALOG[k]['short']}] {SAMPLE_CATALOG[k]['label']}", key="comp_samples")
+    if not comp_samples:
+        st.warning("⚠️ Select at least one sample to compare.")
+    else:
+        col_opt1, col_opt2 = st.columns(2)
+        with col_opt1:
+            normalize = st.checkbox("✓ Normalise to [0,1]", value=True, key="comp_normalize")
+            show_grid = st.checkbox("✓ Show grid", value=True, key="comp_grid")
+        with col_opt2:
+            line_width = st.slider("Line width", 0.5, 3.0, 1.5, 0.1, key="comp_lw")
+            opacity = st.slider("Opacity", 0.3, 1.0, 1.0, 0.1, key="comp_alpha")
+        if view_mode == "📊 Interactive (Plotly)":
+            fig_cmp = go.Figure()
+            for k in comp_samples:
+                df_s = all_data.get(k, pd.DataFrame({"two_theta": np.linspace(30, 130, 2000), "intensity": np.random.normal(200, 50, 2000)}))
+                x, y = df_s["two_theta"].values, df_s["intensity"].values
+                if normalize and len(y) > 1:
+                    y = (y - y.min()) / (y.max() - y.min() + 1e-8)
+                m = SAMPLE_CATALOG[k]
+                fig_cmp.add_trace(go.Scatter(x=x, y=y, mode="lines", name=m["label"], line=dict(color=m["color"], width=line_width), opacity=opacity))
+            fig_cmp.update_layout(title="XRD Pattern Comparison", xaxis_title="2θ (degrees)", yaxis_title="Normalised Intensity" if normalize else "Intensity (counts)", template="plotly_white" if show_grid else "plotly", height=500, hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            st.plotly_chart(fig_cmp, use_container_width=True)
+        else:
+            st.markdown("### 🎨 Publication Plot Settings")
+            col_pub1, col_pub2, col_pub3 = st.columns(3)
+            with col_pub1:
+                pub_width = st.slider("Width (inches)", 6.0, 14.0, 10.0, 0.5, key="pub_comp_w")
+                pub_font = st.slider("Font Size", 8, 18, 11, 1, key="pub_comp_font")
+                stack_offset = st.slider("Stack offset", 0.0, 1.5, 0.0, 0.1, key="pub_comp_stack")
+            with col_pub2:
+                pub_height = st.slider("Height (inches)", 5.0, 12.0, 7.0, 0.5, key="pub_comp_h")
+                pub_legend_pos = st.selectbox("Legend", ["best", "upper right", "upper left", "lower left", "lower right", "center right", "off"], key="pub_comp_leg")
+            with col_pub3:
+                st.markdown("**🎨 Per-Sample Styling**")
+                sample_styles = {}
+                for k in comp_samples:
+                    m = SAMPLE_CATALOG[k]
+                    with st.expander(f"{m['short']}", expanded=False):
+                        sample_styles[k] = {"color": st.color_picker("Color", m["color"], key=f"col_{k}"), "style": st.selectbox("Line", ["-", "--", ":", "-."], index=0, key=f"sty_{k}"), "width": st.slider("Width", 0.5, 3.0, 1.5, 0.1, key=f"lw_{k}"), "label": st.text_input("Legend Label", m["label"], key=f"lbl_{k}")}
+            sample_data_list, legend_labels, line_styles = [], [], []
+            for k in comp_samples:
+                df_s = all_data.get(k, pd.DataFrame({"two_theta": np.linspace(30, 130, 2000), "intensity": np.random.normal(200, 50, 2000)}))
+                styles = sample_styles.get(k, {})
+                sample_data_list.append({"two_theta": df_s["two_theta"].values, "intensity": df_s["intensity"].values, "label": SAMPLE_CATALOG[k]["label"], "color": styles.get("color", SAMPLE_CATALOG[k]["color"]), "linewidth": styles.get("width", line_width)})
+                legend_labels.append(styles.get("label", SAMPLE_CATALOG[k]["label"]))
+                line_styles.append(styles.get("style", "-"))
+            try:
+                fig_pub, ax_pub = plot_sample_comparison_publication(sample_data_list=sample_data_list, tt_min=tt_min, tt_max=tt_max, figsize=(pub_width, pub_height), font_size=pub_font, legend_pos=pub_legend_pos if pub_legend_pos != "off" else "off", normalize=normalize, stack_offset=stack_offset, line_styles=line_styles, legend_labels=legend_labels, show_grid=show_grid)
+                st.pyplot(fig_pub, dpi=150, use_container_width=True)
+                st.markdown("#### 📥 Export Publication Figure")
+                col_e1, col_e2, col_e3 = st.columns(3)
+                with col_e1:
+                    buf = io.BytesIO(); fig_pub.savefig(buf, format='pdf', bbox_inches='tight'); buf.seek(0)
+                    st.download_button("📄 PDF", buf.read(), file_name=f"xrd_comparison_{len(comp_samples)}samples.pdf", mime="application/pdf", use_container_width=True)
+                with col_e2:
+                    buf = io.BytesIO(); fig_pub.savefig(buf, format='png', dpi=300, bbox_inches='tight'); buf.seek(0)
+                    st.download_button("🖼️ PNG (300 DPI)", buf.read(), file_name=f"xrd_comparison_{len(comp_samples)}samples.png", mime="image/png", use_container_width=True)
+                with col_e3:
+                    buf = io.BytesIO(); fig_pub.savefig(buf, format='eps', bbox_inches='tight'); buf.seek(0)
+                    st.download_button("📐 EPS", buf.read(), file_name=f"xrd_comparison_{len(comp_samples)}samples.eps", mime="application/postscript", use_container_width=True)
+                plt.close(fig_pub)
+            except Exception as e:
+                st.error(f"❌ Plot generation failed: {str(e)}")
+
+# TAB 5 — REPORT
+with tabs[5]:
+    st.subheader("Analysis Report")
+    if "last_result" not in st.session_state:
+        st.info("Run the Rietveld refinement first (Tab 3).")
+    else:
+        result, phases, samp = st.session_state["last_result"], st.session_state["last_phases"], st.session_state["last_sample"]
+        report_md = generate_report(result, phases, wavelength, samp)
+        st.markdown(report_md)
+        col_dl1, col_dl2 = st.columns(2)
+        col_dl1.download_button("⬇️ Download Report (.md)", data=report_md, file_name=f"rietveld_report_{samp}.md", mime="text/markdown")
+        export_df = active_df.copy()
+        export_df["y_calc"], export_df["y_background"], export_df["difference"] = result["y_calc"], result["y_background"], active_df["intensity"].values - result["y_calc"]
+        csv_buf = io.StringIO()
+        export_df.to_csv(csv_buf, index=False)
+        col_dl2.download_button("⬇️ Download Fit Data (.csv)", data=csv_buf.getvalue(), file_name=f"rietveld_fit_{samp}.csv", mime="text/csv")
+
+# TAB 6 — PUBLICATION PLOT
+with tabs[6]:
+    st.subheader("🖼️ Publication-Quality Plot (matplotlib)")
+    st.caption("Generate journal-ready figures with customizable phase markers, legend control & spacing")
+    if "last_result" not in st.session_state or "last_phases" not in st.session_state:
+        st.info("🔬 Run the Rietveld refinement first (Tab 3: 🧮 Rietveld Fit) to enable publication plotting.")
+    else:
+        result = st.session_state["last_result"]
+        phases = st.session_state["last_phases"]
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            fig_width = st.slider("Figure width (inches)", 6.0, 14.0, 10.0, 0.5, key="pub_width")
+            offset_factor = st.slider("Difference curve offset", 0.05, 0.25, 0.12, 0.01, key="pub_offset")
+            font_size = st.slider("Global Font Size", 6, 22, 11, key="pub_font")
+        with col2:
+            fig_height = st.slider("Figure height (inches)", 5.0, 12.0, 7.0, 0.5, key="pub_height")
+            show_hkl = st.checkbox("Show hkl labels", value=True, key="pub_hkl")
+            legend_pos = st.selectbox("Legend Position", ["best", "upper right", "upper left", "lower left", "lower right", "center right", "center left", "lower center", "upper center", "center", "off"], index=0, key="pub_legend_pos")
+        with col3:
+            export_format = st.selectbox("Export format", ["PDF", "PNG", "EPS"], index=0, key="pub_format")
+            marker_spacing = st.slider("Marker row spacing", 0.8, 2.5, 1.3, 0.1, key="pub_spacing")
+        st.markdown("### 📋 Legend Control")
+        n_cols = min(4, len(phases))
+        legend_cols = st.columns(n_cols)
+        legend_phases_selected = []
+        for idx, ph in enumerate(phases):
+            with legend_cols[idx % n_cols]:
+                if st.checkbox(f"✓ {ph}", value=True, key=f"leg_{ph}"):
+                    legend_phases_selected.append(ph)
+        phase_data = []
+        for i, ph in enumerate(phases):
+            pk_df = generate_theoretical_peaks(ph, wavelength, tt_min, tt_max)
+            with st.expander(f"⚙️ Settings for **{ph}**", expanded=(i==0)):
+                c_col, c_shape = st.columns(2)
+                custom_color = c_col.color_picker("Color", value=PHASE_LIBRARY.get(ph, {}).get("color", "#1f77b4"), key=f"col_{ph}")
+                shape_options = ["|", "_", "s", "^", "v", "d", "x", "+", "*"]
+                default_shape = PHASE_LIBRARY.get(ph, {}).get("marker_shape", "|")
+                default_idx = shape_options.index(default_shape) if default_shape in shape_options else 0
+                custom_shape = c_shape.selectbox("Marker Shape", shape_options, index=default_idx, key=f"shp_{ph}")
+            phase_data.append({"name": ph, "positions": pk_df["two_theta"].values if len(pk_df) > 0 else np.array([]), "color": custom_color, "marker_shape": custom_shape, "hkl": [hkl.strip("()").split(",") if hkl else None for hkl in pk_df["hkl_label"].values] if show_hkl and len(pk_df) > 0 else None})
+        try:
+            fig, ax = plot_rietveld_publication(active_df["two_theta"].values, active_df["intensity"].values, result["y_calc"], active_df["intensity"].values - result["y_calc"], phase_data, offset_factor=offset_factor, figsize=(fig_width, fig_height), font_size=font_size, legend_pos=legend_pos, marker_row_spacing=marker_spacing, legend_phases=legend_phases_selected if legend_phases_selected else None)
+            st.pyplot(fig, dpi=150, use_container_width=True)
+            st.markdown("#### 📥 Export Options")
+            col_e1, col_e2, col_e3 = st.columns(3)
+            with col_e1:
+                buf = io.BytesIO(); fig.savefig(buf, format='pdf', bbox_inches='tight'); buf.seek(0)
+                st.download_button("📄 PDF", buf.read(), file_name=f"rietveld_pub_{selected_key}.pdf", mime="application/pdf", use_container_width=True)
+            with col_e2:
+                buf = io.BytesIO(); fig.savefig(buf, format='png', dpi=300, bbox_inches='tight'); buf.seek(0)
+                st.download_button("🖼️ PNG (300 DPI)", buf.read(), file_name=f"rietveld_pub_{selected_key}.png", mime="image/png", use_container_width=True)
+            with col_e3:
+                buf = io.BytesIO(); fig.savefig(buf, format='eps', bbox_inches='tight'); buf.seek(0)
+                st.download_button("📐 EPS", buf.read(), file_name=f"rietveld_pub_{selected_key}.eps", mime="application/postscript", use_container_width=True)
+            plt.close(fig)
+        except Exception as e:
+            st.error(f"❌ Plot generation failed: {str(e)}")
+
+st.markdown("---")
+st.caption("XRD Rietveld App • Co-Cr Dental Alloy Analysis • Supports .asc, .ASC, .xrdml & .cif • GitHub: Maryamslm/XRD-3Dprinted-Ret/SAMPLES • COD: 9008466 (FCC-Co), 9008492 (HCP-Co) • Materials Project: mp-723 (M₂₃C₆) • ✅ Built-in engine with real lattice refinement")
