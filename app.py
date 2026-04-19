@@ -61,7 +61,7 @@ PHASE_LIBRARY = {
     "FCC-Co": {
         "system": "Cubic", 
         "space_group": "Fm-3m (No. 225)", 
-        "lattice": {"a": 3.548},  # Updated from COD 9008466
+        "lattice": {"a": 3.548},
         "peaks": [("111", 44.2), ("200", 51.5), ("220", 75.8), ("311", 92.1), ("222", 98.5)],
         "color": "#e377c2", 
         "default": True, 
@@ -73,7 +73,7 @@ PHASE_LIBRARY = {
     "HCP-Co": {
         "system": "Hexagonal", 
         "space_group": "P6₃/mmc (No. 194)", 
-        "lattice": {"a": 2.5071, "c": 4.0686},  # Updated from COD 9008492
+        "lattice": {"a": 2.5071, "c": 4.0686},
         "peaks": [("100", 41.6), ("002", 44.8), ("101", 47.5), ("102", 69.2), ("110", 78.1)],
         "color": "#7f7f7f", 
         "default": False, 
@@ -85,7 +85,7 @@ PHASE_LIBRARY = {
     "M23C6": {
         "system": "Cubic", 
         "space_group": "Fm-3m (No. 225)", 
-        "lattice": {"a": 10.63},  # From Materials Project mp-723
+        "lattice": {"a": 10.63},
         "peaks": [("311", 39.8), ("400", 46.2), ("511", 67.4), ("440", 81.3), ("620", 93.5)],
         "color": "#bcbd22", 
         "default": False, 
@@ -116,10 +116,50 @@ def wavelength_to_energy(wavelength_angstrom):
     energy_ev = (h * c) / (wavelength_angstrom * 1e-10)
     return energy_ev / 1000
 
+def _parse_hkl(hkl_label: str) -> tuple:
+    """
+    Parse hkl label like '(311)' or '(3,1,1)' into tuple of integers (h,k,l).
+    Handles both concatenated and comma-separated formats.
+    """
+    # Remove parentheses and whitespace
+    clean = hkl_label.strip().strip("()").replace(" ", "")
+    
+    # Try comma-separated first
+    if "," in clean:
+        parts = clean.split(",")
+        return tuple(int(p.strip()) for p in parts if p.strip())
+    
+    # Handle concatenated format like "311" → (3,1,1) or "-12" → (-1,2,0)
+    # Strategy: parse sign-aware digits
+    result = []
+    i = 0
+    while i < len(clean):
+        # Check for sign
+        sign = 1
+        if clean[i] in "+-":
+            if clean[i] == "-":
+                sign = -1
+            i += 1
+        # Collect digits
+        num_str = ""
+        while i < len(clean) and clean[i].isdigit():
+            num_str += clean[i]
+            i += 1
+        if num_str:
+            result.append(sign * int(num_str))
+        # If we've collected 3 indices, stop
+        if len(result) == 3:
+            break
+    
+    # Pad with zeros if needed (e.g., "11" → (1,1,0))
+    while len(result) < 3:
+        result.append(0)
+    
+    return tuple(result[:3])
+
 def generate_theoretical_peaks(phase_name, wavelength, tt_min, tt_max):
     """Generate theoretical peak positions for a phase."""
     
-    # Check for custom/imported phases first
     if "custom_phases" in st.session_state and phase_name in st.session_state.custom_phases:
         phase = st.session_state.custom_phases[phase_name]
         if "cif_data" in phase:
@@ -187,7 +227,7 @@ def find_peaks_in_data(df, min_height_factor=2.0, min_distance_deg=0.3):
     return result.sort_values("intensity", ascending=False).reset_index(drop=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CIF PARSER (Lightweight, No External Dependencies)
+# CIF PARSER
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_data
@@ -242,7 +282,6 @@ def parse_cif_content(cif_text: str) -> dict:
 
 @st.cache_data(ttl=3600)
 def fetch_cif_from_cod(cod_id: str) -> str:
-    """Fetch CIF from Crystallography Open Database"""
     url = f"https://www.crystallography.net/cod/{cod_id}.cif"
     try:
         response = requests.get(url, timeout=15)
@@ -257,14 +296,6 @@ def fetch_cif_from_cod(cod_id: str) -> str:
 
 @st.cache_data(ttl=3600)
 def fetch_cif_from_materials_project(mp_id: str, api_key: str = None) -> dict:
-    """
-    Fetch crystal structure data from Materials Project API.
-    Returns dict with lattice params, space group, and optional CIF text.
-    
-    Note: Requires API key from https://materialsproject.org/api for full access.
-    Public endpoint provides limited data without auth.
-    """
-    # Public endpoint (no auth required, limited data)
     url = f"https://api.materialsproject.org/materials/{mp_id}/summary"
     headers = {"X-API-KEY": api_key} if api_key else {}
     
@@ -289,7 +320,7 @@ def fetch_cif_from_materials_project(mp_id: str, api_key: str = None) -> dict:
                 "mp_url": f"https://next-gen.materialsproject.org/materials/{mp_id}"
             }
         elif response.status_code == 401:
-            st.warning("⚠️ Materials Project API requires API key for full access. Get one at: https://materialsproject.org/api")
+            st.warning("⚠️ Materials Project API requires API key for full access.")
             return {"error": "Authentication required"}
         else:
             st.error(f"❌ MP fetch failed: HTTP {response.status_code}")
@@ -299,18 +330,15 @@ def fetch_cif_from_materials_project(mp_id: str, api_key: str = None) -> dict:
         return {}
 
 def generate_peaks_from_cif(cif_ dict, wavelength: float, tt_min: float, tt_max: float) -> pd.DataFrame:
-    """Generate theoretical peak positions from CIF/MP lattice parameters using Bragg's law."""
     sg = cif_data.get("space_group_hm", "")
     a = cif_data["cell_params"].get("length_a", 3.544)
     c = cif_data["cell_params"].get("length_c", None)
     
-    # FCC-Co (F m -3 m) or M23C6 (also Fm-3m, larger a)
     if "F m -3 m" in sg or (c is None and a > 3.4):
-        if a > 10.0:  # M23C6 has large cubic cell
+        if a > 10.0:
             peaks = [("311", 39.8), ("400", 46.2), ("511", 67.4), ("440", 81.3), ("620", 93.5)]
-        else:  # FCC-Co
+        else:
             peaks = [("111", 44.2), ("200", 51.5), ("220", 75.8), ("311", 92.1), ("222", 98.5)]
-    # HCP-Co (P 63/m m c)
     elif "P 63/m m c" in sg or (c is not None and abs(c/a - 1.62) < 0.1):
         peaks = [("100", 41.6), ("002", 44.8), ("101", 47.5), ("102", 69.2), ("110", 78.1)]
     else:
@@ -456,21 +484,10 @@ def find_github_file_by_catalog_key(catalog_key: str, gh_files: list):
     return None
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ✅ IMPROVED RIETVELD ENGINE WITH REAL LATTICE REFINEMENT
+# ✅ IMPROVED RIETVELD ENGINE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class RietveldRefinement:
-    """
-    Pure-Python Rietveld-style refinement engine.
-    Features:
-    • Polynomial background modeling
-    • Pseudo-Voigt/Gaussian/Lorentzian peak profiles
-    • Caglioti FWHM modeling for angle-dependent broadening
-    • Real lattice parameter refinement via Bragg's law
-    • Zero-shift correction as refinable parameter
-    • R-factors and goodness-of-fit metrics
-    """
-    
     def __init__(self, data, phases, wavelength, bg_poly_order=4, peak_shape="Pseudo-Voigt", 
                  use_caglioti=True, estimate_uncertainty=False):
         self.data = data
@@ -540,6 +557,7 @@ class RietveldRefinement:
         return self.y_obs - self._calculate_pattern(params)
    
     def _refine_lattice_from_peaks(self, refined_positions, phase_name, phase_peaks_df):
+        """✅ FIXED: Properly parse hkl labels like '(311)' → (3,1,1)"""
         if not refined_positions or len(phase_peaks_df) == 0:
             return PHASE_LIBRARY.get(phase_name, {}).get("lattice", {}).copy()
         
@@ -554,18 +572,18 @@ class RietveldRefinement:
         if sys_type == "Cubic":
             a_vals = []
             for d_val, (_, pk) in zip(d_vals, phase_peaks_df.iterrows()):
-                hkl = pk["hkl_label"].strip("()").split(",")
-                hkl_int = [int(h.strip()) for h in hkl]
-                sum_sq = sum(h**2 for h in hkl_int)
+                # ✅ Use helper function to parse hkl correctly
+                h, k, l = _parse_hkl(pk["hkl_label"])
+                sum_sq = h**2 + k**2 + l**2
                 if sum_sq > 0:
                     a_vals.append(d_val * np.sqrt(sum_sq))
             if a_vals:
                 return {"a": float(np.mean(a_vals))}
+                
         elif sys_type == "Hexagonal":
             a_vals, c_vals = [], []
             for d_val, (_, pk) in zip(d_vals, phase_peaks_df.iterrows()):
-                hkl = pk["hkl_label"].strip("()").split(",")
-                h, k, l = [int(h.strip()) for h in hkl]
+                h, k, l = _parse_hkl(pk["hkl_label"])
                 if l == 0 and (h != 0 or k != 0):
                     a_vals.append(d_val * np.sqrt(4/3 * (h**2 + h*k + k**2)))
                 elif h == 0 and k == 0 and l != 0:
@@ -576,11 +594,11 @@ class RietveldRefinement:
             if "a" not in result and "a" in ref_lattice: result["a"] = ref_lattice["a"]
             if "c" not in result and "c" in ref_lattice: result["c"] = ref_lattice["c"]
             return result
+            
         elif sys_type == "Tetragonal":
             a_vals, c_vals = [], []
             for d_val, (_, pk) in zip(d_vals, phase_peaks_df.iterrows()):
-                hkl = pk["hkl_label"].strip("()").split(",")
-                h, k, l = [int(h.strip()) for h in hkl]
+                h, k, l = _parse_hkl(pk["hkl_label"])
                 if l == 0:
                     a_vals.append(d_val * np.sqrt(h**2 + k**2))
                 elif h == 0 and k == 0:
@@ -591,6 +609,7 @@ class RietveldRefinement:
             if "a" not in result and "a" in ref_lattice: result["a"] = ref_lattice["a"]
             if "c" not in result and "c" in ref_lattice: result["c"] = ref_lattice["c"]
             return result
+        
         return ref_lattice.copy()
    
     def _estimate_parameter_uncertainty(self, result, params_opt):
@@ -724,7 +743,7 @@ def generate_report(result, phases, wavelength, sample_key):
     return report
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ENHANCED PLOTTING FUNCTIONS
+# PLOTTING FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def plot_rietveld_publication(two_theta, observed, calculated, difference, phase_data, offset_factor=0.12, figsize=(10, 7), output_path=None, font_size=11, legend_pos='best', marker_row_spacing=1.3, legend_phases=None):
@@ -983,7 +1002,7 @@ with st.sidebar:
             src_badge = ""
             if "cod_id" in ph_
                 src_badge = f"🔗 [COD:{ph_data['cod_id']}]({ph_data['cif_source']})"
-            elif "mp_id" in ph_
+            elif "mp_id" in ph_data:
                 src_badge = f"⚛️ [MP:{ph_data['mp_id']}]({ph_data['cif_source']})"
             st.markdown(f"- **{ph_name}**: {ph_data['space_group']} • a={ph_data['lattice'].get('a','?')}Å {src_badge}")
     
@@ -1066,7 +1085,7 @@ with st.sidebar:
         label = ph_name
         if "cod_id" in ph_
             label = f"{ph_name} 🔗 COD:{ph_data['cod_id']}"
-        elif "mp_id" in ph_
+        elif "mp_id" in ph_data:
             label = f"{ph_name} ⚛️ MP:{ph_data['mp_id']}"
         elif ph_name in (st.session_state.get("custom_phases", {}) or {}):
             label = f"{ph_name} 📤 Custom"
