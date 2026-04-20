@@ -249,7 +249,7 @@ def fetch_cif_from_materials_project(mp_id: str, api_key: str = None) -> dict:
         st.error(f"❌ MP fetch failed: {e}")
         return {}
 
-def generate_peaks_from_cif(cif_data: dict, wavelength: float, tt_min: float, tt_max: float) -> pd.DataFrame:
+def generate_peaks_from_cif(cif_ dict, wavelength: float, tt_min: float, tt_max: float) -> pd.DataFrame:
     sg = cif_data.get("space_group_hm", "")
     a = cif_data["cell_params"].get("length_a", 3.544)
     c = cif_data["cell_params"].get("length_c", None)
