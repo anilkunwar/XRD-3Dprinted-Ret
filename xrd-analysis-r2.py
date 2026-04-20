@@ -773,7 +773,7 @@ with st.sidebar:
                             index=3)
    
     if source_option == "Demo samples":
-        if selected_key in all_
+        if selected_key in all_data:
             active_df_raw = all_data[selected_key]
             st.success(f"📌 Sample **{selected_key}** — {meta['label']}")
         else:
