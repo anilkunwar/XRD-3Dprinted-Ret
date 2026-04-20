@@ -7,4 +7,5 @@ matplotlib
 requests
 numba
 powerxrd
+lmfit
 
