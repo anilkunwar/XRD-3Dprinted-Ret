@@ -6,4 +6,4 @@ plotly
 matplotlib
 requests
 numba
-GSAS-II
+
