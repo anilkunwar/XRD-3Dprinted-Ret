@@ -1,4 +1,3 @@
-```python
 """
 XRD Rietveld Analysis — Co-Cr Dental Alloy (Mediloy S Co, BEGO)
 ================================================================
@@ -1322,4 +1321,4 @@ st.markdown("---")
 st.caption(f"""XRD Rietveld App • Co-Cr Dental Alloy Analysis • Supports .asc, .ASC & .xrdml • GitHub: Maryamslm/XRD-3Dprinted-Ret/SAMPLES
 
 **Active Engine**: {st.session_state.get("last_engine", selected_engine_name)} | {'✅ Numba JIT active' if ENGINES_AVAILABLE['numba_fast'] else '⚠️ Install numba'} | {'✅ PowerXRD available' if ENGINES_AVAILABLE['powerxrd'] else '💡 Optional: pip install powerxrd'}""")
-```
+
