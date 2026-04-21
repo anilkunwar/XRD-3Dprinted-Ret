@@ -4400,13 +4400,24 @@ with tabs[5]:
         
         with col_dl2:
             # HTML export (simple conversion)
+            formatted_report = (
+                report_md
+                .replace('## ', '<h2>')
+                .replace('### ', '<h3>')
+                .replace('#### ', '<h4>')
+                .replace('|', '</td><td>')
+                .replace('\n', '<br>')
+            )
             html_report = f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>XRD Report - {sample_key}</title>
-<style>body{{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;padding:20px}}
-table{{border-collapse:collapse;width:100%}}th,td{{border:1px solid #ddd;padding:8px;text-align:left}}
-th{{background-color:#f2f2f2}}</style></head><body>
-{report_md.replace('## ', '<h2>').replace('### ', '<h3>').replace('#### ', '<h4>').replace('|', '</td><td>').replace('\n', '<br>')}
-</body></html>"""
+<style>
+body{{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;padding:20px}}
+table{{border-collapse:collapse;width:100%}}
+th,td{{border:1px solid #ddd;padding:8px;text-align:left}}
+th{{background-color:#f2f2f2}}
+</style></head><body>
+{formatted_report}
+</body></html>"""            
             st.download_button(
                 "🌐 Download Report (.html)", 
                 data=html_report, 
