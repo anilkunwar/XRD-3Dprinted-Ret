@@ -1910,12 +1910,23 @@ def run_powerxrd_refinement(data_df: pd.DataFrame, phases_tuple: Tuple[str],
     
     try:
         # Default staged refinement if not specified
+        #
         if refinement_stages is None:
+            #          
+            # ── AFTER (fixed) ──
             refinement_stages = [
                 ["bkg_intercept", "bkg_slope", "bkg_quadratic"] + [f"{c.name}_scale" for c in crystals],
+                
+                # Cubic phases: only 'a' parameter
                 [f"{c.name}_a" for c in crystals if c.lattice_type == "cubic"] +
-                [f"{c.name}_a", f"{c.name}_c" for c in crystals if c.lattice_type in ["hexagonal", "tetragonal"]],
-                [f"{c.name}_U", f"{c.name}_V", f"{c.name}_W" for c in crystals]  # Peak width
+                # Hexagonal/Tetragonal: both 'a' and 'c' parameters (nested comprehension)
+                [f"{c.name}_{param}" for c in crystals 
+                 if c.lattice_type in ["hexagonal", "tetragonal"] 
+                 for param in ["a", "c"]],
+                
+                # Peak width parameters for all crystals (nested comprehension)
+                [f"{c.name}_{param}" for c in crystals 
+                 for param in ["U", "V", "W"]]
             ]
         
         # Run staged refinement
