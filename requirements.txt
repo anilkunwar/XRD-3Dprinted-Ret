@@ -6,6 +6,6 @@ plotly
 matplotlib
 requests
 numba
-powerxrd
+powerxrd>=2.3.0,<4.0.0
 lmfit
 
