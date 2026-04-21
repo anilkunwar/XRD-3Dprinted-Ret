@@ -810,6 +810,7 @@ def generate_theoretical_peaks(phase_name: str, wavelength: float,
             }
             
             # Simplified intensity estimation (structure factor approximation)
+            
             if include_intensity:
               # BEFORE (CODE DOES NOT WORK)
                 # Use multiplicity * Lorentz-polarization factor as proxy
@@ -819,20 +820,22 @@ def generate_theoretical_peaks(phase_name: str, wavelength: float,
                 peak_entry["relative_intensity"] = round(multiplicity * lp_factor * 100, 1)
                 #AFTER
                 # Parse Miller indices safely (handles "111", "1 1 1", "1,1,1")
+                # Parse Miller indices safely (handles "111", "1 1 1", "1,1,1")
                 digits = re.findall(r'\d+', hkl_str)
-                    if len(digits) == 1 and len(digits[0]) == 3:
-                        # Compact format: "111" -> (1, 1, 1)
-                        h, k, l = int(digits[0][0]), int(digits[0][1]), int(digits[0][2])
-                    elif len(digits) >= 3:
-                        # Separated format: "1,1,1" or "1 1 1"
-                        h, k, l = int(digits[0]), int(digits[1]), int(digits[2])
-                    else:
-                        # Fallback for unexpected formats
-                        h, k, l = 1, 1, 1
-                        
-                    multiplicity = _calculate_multiplicity(h, k, l, phase["system"])
-                    lp_factor = _lorentz_polarization_factor(tt_approx)
-                    peak_entry["relative_intensity"] = round(multiplicity * lp_factor * 100, 1)
+                if len(digits) == 1 and len(digits[0]) == 3:
+                    # Compact format: "111" -> (1, 1, 1)
+                    h, k, l = int(digits[0][0]), int(digits[0][1]), int(digits[0][2])
+                elif len(digits) >= 3:
+                    # Separated format: "1,1,1" or "1 1 1"
+                    h, k, l = int(digits[0]), int(digits[1]), int(digits[2])
+                else:
+                    # Fallback for unexpected formats
+                    h, k, l = 1, 1, 1
+                    
+                multiplicity = _calculate_multiplicity(h, k, l, phase["system"])
+                lp_factor = _lorentz_polarization_factor(tt_approx)
+                peak_entry["relative_intensity"] = round(multiplicity * lp_factor * 100, 1)
+              
             
             peaks.append(peak_entry)
     
