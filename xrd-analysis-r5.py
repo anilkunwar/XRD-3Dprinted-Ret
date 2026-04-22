@@ -1362,7 +1362,7 @@ def add_peaks_to_pattern_numba(x: np.ndarray, y_calc: np.ndarray,
         fwhm = peaks_fwhm[k]
         lp = lp_factors[k]
         
-        profile = pseudo_voigt_peak(x, pos, fwhm, eta)
+        profile = pseudo_voigt_profile(x, pos, fwhm, eta)
         
         for i in range(len(x)):
             y_calc[i] += amp * lp * profile[i]
@@ -3457,7 +3457,7 @@ with tabs[0]:
             st.success("✅ Consistent step size")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 1 — PEAK IDENTIFICATION: DETECTION & PHASE MATCHING
+# TAB 1 — PEAK IDENTIFICATION: DETECTION & PHASE MATCHING (FIXED)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 with tabs[1]:
@@ -3564,29 +3564,29 @@ with tabs[1]:
     st.markdown(f"#### 🎯 {len(obs_peaks)} peaks detected")
     
     if len(obs_peaks):
-        # Prepare display DataFrame
-        disp = obs_peaks.copy()
-        disp["Phase match"] = matches["phase"].values
-        disp["(hkl)"] = matches["hkl"].values
-        disp["Δ2θ (°)"] = matches["delta"].round(4).values
-        disp["two_theta"] = disp["two_theta"].round(4)
-        disp["intensity"] = disp["intensity"].round(1)
-        disp["prominence"] = disp["prominence"].round(1)
+        # Prepare display DataFrame – SAFELY handle None/NaN values
+        display_df = obs_peaks[["two_theta","intensity","prominence"]].copy()
+        display_df["Phase match"] = matches["phase"].fillna("Unmatched")
+        display_df["(hkl)"] = matches["hkl"].fillna("—")
+        display_df["Δ2θ (°)"] = matches["delta"].round(4).fillna("—")
         
-        # Color-code matched vs unmatched peaks
-        def highlight_match(val):
-            if pd.isna(val) or val is None:
-                return "background-color: #fff3cd"  # Yellow for unmatched
-            return ""
+        # Format numbers
+        display_df["two_theta"] = display_df["two_theta"].round(4)
+        display_df["intensity"] = display_df["intensity"].round(1)
+        display_df["prominence"] = display_df["prominence"].round(1)
         
-        st.dataframe(
-            disp[["two_theta","intensity","prominence","Phase match","(hkl)","Δ2θ (°)"]].style.map(highlight_match, subset=["Phase match"]),
-            use_container_width=True,
-            height=300
-        )
+        # Apply highlighting to unmatched rows
+        def highlight_unmatched(row):
+            if row["Phase match"] == "Unmatched":
+                return ["background-color: #fff3cd"] * len(row)
+            return [""] * len(row)
+        
+        styled = display_df.style.apply(highlight_unmatched, axis=1)
+        
+        st.dataframe(styled, use_container_width=True, height=300)
         
         # Statistics
-        matched = matches["phase"].notna().sum()
+        matched = (display_df["Phase match"] != "Unmatched").sum()
         st.markdown(f"**Matching rate**: {matched}/{len(obs_peaks)} = {matched/len(obs_peaks)*100:.1f}% within ±{tol}°")
     
     # Theoretical peaks expander
