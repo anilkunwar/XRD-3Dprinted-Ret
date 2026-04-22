@@ -35,7 +35,7 @@ REQUIREMENTS:
   • Optional: powerxrd>=2.3.0,<4.0.0 for advanced Rietveld refinement
 
 AUTHOR: XRD Analysis Team • Co-Cr Dental Alloy Research Group
-VERSION: 2.1.0 • Last Updated: 2026-04-21
+VERSION: 2.1.0 • Last Updated: 2026-04-22
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -774,7 +774,7 @@ PHASE_LIBRARY: Dict[str, Dict[str, Any]] = {
 # ═══════════════════════════════════════════════════════════════════════════════
 # UTILITY FUNCTIONS: PEAK GENERATION, MATCHING, DATA PROCESSING
 # ═══════════════════════════════════════════════════════════════════════════════
-#
+
 def generate_theoretical_peaks(phase_name: str, wavelength: float, 
                               tt_min: float, tt_max: float,
                               include_intensity: bool = False) -> pd.DataFrame:
@@ -1919,21 +1919,16 @@ def run_powerxrd_refinement(data_df: pd.DataFrame, phases_tuple: Tuple[str],
     
     try:
         # Default staged refinement if not specified
-        #
         if refinement_stages is None:
-            #          
-            # ── AFTER (fixed) ──
             refinement_stages = [
                 ["bkg_intercept", "bkg_slope", "bkg_quadratic"] + [f"{c.name}_scale" for c in crystals],
-                
                 # Cubic phases: only 'a' parameter
                 [f"{c.name}_a" for c in crystals if c.lattice_type == "cubic"] +
-                # Hexagonal/Tetragonal: both 'a' and 'c' parameters (nested comprehension)
+                # Hexagonal/Tetragonal: both 'a' and 'c' parameters
                 [f"{c.name}_{param}" for c in crystals 
                  if c.lattice_type in ["hexagonal", "tetragonal"] 
                  for param in ["a", "c"]],
-                
-                # Peak width parameters for all crystals (nested comprehension)
+                # Peak width parameters for all crystals
                 [f"{c.name}_{param}" for c in crystals 
                  for param in ["U", "V", "W"]]
             ]
