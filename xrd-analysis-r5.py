@@ -774,7 +774,7 @@ PHASE_LIBRARY: Dict[str, Dict[str, Any]] = {
 # ═══════════════════════════════════════════════════════════════════════════════
 # UTILITY FUNCTIONS: PEAK GENERATION, MATCHING, DATA PROCESSING
 # ═══════════════════════════════════════════════════════════════════════════════
-
+#
 def generate_theoretical_peaks(phase_name: str, wavelength: float, 
                               tt_min: float, tt_max: float,
                               include_intensity: bool = False) -> pd.DataFrame:
@@ -809,17 +809,7 @@ def generate_theoretical_peaks(phase_name: str, wavelength: float,
                 "hkl_label": f"({hkl_str})"
             }
             
-            # Simplified intensity estimation (structure factor approximation)
-            
             if include_intensity:
-              # BEFORE (CODE DOES NOT WORK)
-                # Use multiplicity * Lorentz-polarization factor as proxy
-                h, k, l = map(int, re.findall(r'\d+', hkl_str))
-                multiplicity = _calculate_multiplicity(h, k, l, phase["system"])
-                lp_factor = _lorentz_polarization_factor(tt_approx)
-                peak_entry["relative_intensity"] = round(multiplicity * lp_factor * 100, 1)
-                #AFTER
-                # Parse Miller indices safely (handles "111", "1 1 1", "1,1,1")
                 # Parse Miller indices safely (handles "111", "1 1 1", "1,1,1")
                 digits = re.findall(r'\d+', hkl_str)
                 if len(digits) == 1 and len(digits[0]) == 3:
@@ -835,7 +825,6 @@ def generate_theoretical_peaks(phase_name: str, wavelength: float,
                 multiplicity = _calculate_multiplicity(h, k, l, phase["system"])
                 lp_factor = _lorentz_polarization_factor(tt_approx)
                 peak_entry["relative_intensity"] = round(multiplicity * lp_factor * 100, 1)
-              
             
             peaks.append(peak_entry)
     
